@@ -1,0 +1,10 @@
+{
+  "name": "HelpConnect",
+  "description": "A community-based help platform connecting people who need help with people ready to help.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,1035 @@
+{
+  "entities": {
+    "UserPublic": {
+      "title": "UserPublic",
+      "description": "Public-safe user profile without PII",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "photoUrl": { "type": "string", "maxLength": 120000 },
+        "bloodGroup": { "type": "string", "maxLength": 10 },
+        "approximateArea": { "type": "string", "maxLength": 120 },
+        "canProvide": { "type": "array", "items": { "type": "string", "maxLength": 40 }, "maxItems": 15 },
+        "verified": { "type": "boolean" },
+        "peopleHelped": { "type": "number" },
+        "requestsCompleted": { "type": "number" },
+        "volunteerHours": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "verified", "createdAt", "updatedAt"]
+    },
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Private PII isolated from public reads",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "mobile": { "type": "string", "maxLength": 30 },
+        "city": { "type": "string", "maxLength": 80 },
+        "state": { "type": "string", "maxLength": 80 },
+        "fullLocation": { "type": "string", "maxLength": 200 },
+        "helpCategories": { "type": "array", "items": { "type": "string", "maxLength": 40 }, "maxItems": 15 },
+        "mobileVerified": { "type": "boolean" },
+        "termsAcceptedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "updatedAt"]
+    },
+    "HelpRequest": {
+      "title": "HelpRequest",
+      "description": "Community help request lifecycle document",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "requesterDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "helperId": { "type": "string", "maxLength": 128 },
+        "helperDisplayName": { "type": "string", "maxLength": 80 },
+        "helperVerified": { "type": "boolean" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 140 },
+        "description": { "type": "string", "minLength": 3, "maxLength": 1000 },
+        "category": {
+          "type": "string",
+          "enum": ["Emergency", "Blood", "Money", "Food", "Medicine", "Transport", "Education", "Shelter", "Volunteer", "Other"]
+        },
+        "location": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "urgency": { "type": "string", "enum": ["Normal", "High", "Urgent", "Immediate"] },
+        "bloodGroup": { "type": "string", "maxLength": 10 },
+        "units": { "type": "number" },
+        "amountNeeded": { "type": "number" },
+        "amountCollected": { "type": "number" },
+        "status": {
+          "type": "string",
+          "enum": [
+            "REQUESTED",
+            "OPEN",
+            "WAITING_FOR_HELPERS",
+            "ONE_HELPER_ACCEPTED",
+            "TWO_HELPERS_ACCEPTED",
+            "THREE_HELPERS_FOUND",
+            "AWAITING_RECEIVER_SELECTION",
+            "HELPER_SELECTED",
+            "CONFIRMED",
+            "HELPER_UNAVAILABLE",
+            "BACKUP_SELECTION_REQUIRED",
+            "ON_THE_WAY",
+            "ARRIVED",
+            "ASSISTANCE_IN_PROGRESS",
+            "ACCEPTED",
+            "IN_PROGRESS",
+            "AWAITING_CONFIRMATION",
+            "COMPLETED_CONFIRMED",
+            "COMPLETED",
+            "COMPLETED_UNCONFIRMED",
+            "REOPENED",
+            "ISSUE_REPORTED",
+            "UNDER_REVIEW",
+            "CANCELLED"
+          ]
+        },
+        "acceptedCount": { "type": "number" },
+        "remainingSlots": { "type": "number" },
+        "matchingRound": { "type": "number" },
+        "selectedHelperId": { "type": "string", "maxLength": 128 },
+        "acceptanceClosed": { "type": "boolean" },
+        "reopenedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "acceptedAt": { "type": "string", "format": "date-time" },
+        "journeyStartedAt": { "type": "string", "format": "date-time" },
+        "arrivedAt": { "type": "string", "format": "date-time" },
+        "assistanceStartedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "confirmedAt": { "type": "string", "format": "date-time" },
+        "cancellationReason": { "type": "string", "maxLength": 500 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requestId", "requesterId", "requesterDisplayName", "title", "description", "category", "location", "urgency", "status", "createdAt", "updatedAt"]
+    },
+    "HelpCompletionSubmission": {
+      "title": "HelpCompletionSubmission",
+      "description": "Helper submission marking assistance completed with optional evidence",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "helperId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "completionDescription": { "type": "string", "maxLength": 1000 },
+        "evidenceDataUrl": { "type": "string", "maxLength": 550000 },
+        "evidenceFileName": { "type": "string", "maxLength": 120 },
+        "submittedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requestId", "requesterId", "helperId", "submittedAt"]
+    },
+    "HelpConfirmation": {
+      "title": "HelpConfirmation",
+      "description": "Requester confirmation and optional feedback/rating",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "helperId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "confirmationStatus": { "type": "string", "enum": ["CONFIRMED", "NOT_YET_RECEIVED", "ISSUE_REPORTED"] },
+        "feedback": { "type": "string", "maxLength": 600 },
+        "rating": { "type": "number" },
+        "appreciationMessage": { "type": "string", "maxLength": 300 },
+        "explanation": { "type": "string", "maxLength": 600 },
+        "confirmedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requestId", "requesterId", "helperId", "confirmationStatus", "confirmedAt"]
+    },
+    "DigitalProof": {
+      "title": "DigitalProof",
+      "description": "Privacy-safe verified Digital Proof of Help certificate",
+      "type": "object",
+      "properties": {
+        "proofId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "helperId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "requestTitle": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "requesterDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "helperDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "verificationToken": { "type": "string", "minLength": 12, "maxLength": 128 },
+        "proofStatus": { "type": "string", "enum": ["VALID", "SUSPENDED"] },
+        "optionalFeedback": { "type": "string", "maxLength": 600 },
+        "rating": { "type": "number" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "confirmedAt": { "type": "string", "format": "date-time" },
+        "generatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "proofId",
+        "requestId",
+        "requesterId",
+        "helperId",
+        "requestTitle",
+        "category",
+        "requesterDisplayName",
+        "helperDisplayName",
+        "verificationToken",
+        "proofStatus",
+        "generatedAt"
+      ]
+    },
+    "HelpIssue": {
+      "title": "HelpIssue",
+      "description": "Reported assistance dispute or suspicious activity record",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "reportedBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "helperId": { "type": "string", "maxLength": 128 },
+        "issueDescription": { "type": "string", "minLength": 3, "maxLength": 1000 },
+        "issueStatus": { "type": "string", "enum": ["OPEN", "UNDER_REVIEW", "RESOLVED", "FLAGGED"] },
+        "adminNotes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "resolvedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requestId", "reportedBy", "requesterId", "issueDescription", "issueStatus", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time workflow notification for requester, helper, blood donor, or admin",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "requestId": { "type": "string", "maxLength": 64 },
+        "bloodRequestId": { "type": "string", "maxLength": 64 },
+        "foodDonationId": { "type": "string", "maxLength": 64 },
+        "foodAssistanceId": { "type": "string", "maxLength": 64 },
+        "foodCertificateId": { "type": "string", "maxLength": 64 },
+        "proofId": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "notificationType": { "type": "string", "maxLength": 60 },
+        "actionUrl": { "type": "string", "maxLength": 140 },
+        "deliveryChannels": { "type": "array", "items": { "type": "string", "maxLength": 20 }, "maxItems": 5 },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "actorId", "title", "message", "notificationType", "isRead", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable append-only audit log for status and proof actions",
+      "type": "object",
+      "properties": {
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "action": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "entityType": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "entityId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "previousStatus": { "type": "string", "maxLength": 60 },
+        "newStatus": { "type": "string", "maxLength": 60 },
+        "details": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorId", "action", "entityType", "entityId", "previousStatus", "newStatus", "createdAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Real-time coordination chat message between requester and helper or blood donor",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "recipientId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "senderName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "senderPhotoUrl": { "type": "string", "maxLength": 500 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "messageType": { "type": "string", "enum": ["text", "hospital_location", "availability_confirm", "contact_share"] },
+        "hospitalName": { "type": "string", "maxLength": 140 },
+        "hospitalAddress": { "type": "string", "maxLength": 240 },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "sharedContact": { "type": "string", "maxLength": 40 },
+        "readBy": { "type": "array", "items": { "type": "string", "maxLength": 128 }, "maxItems": 20 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["messageId", "requestId", "senderId", "senderName", "text", "createdAt"]
+    },
+    "AccountIdentifier": {
+      "title": "AccountIdentifier",
+      "description": "Hashed non-PII lookup record to prevent duplicate email or mobile registrations",
+      "type": "object",
+      "properties": {
+        "identifierType": { "type": "string", "enum": ["email", "mobile"] },
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["identifierType", "uid", "createdAt"]
+    },
+    "HelperAcceptance": {
+      "title": "HelperAcceptance",
+      "description": "Multi-helper matching acceptance slot record per matching round",
+      "type": "object",
+      "properties": {
+        "acceptanceId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "helperId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "helperDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "helperPhotoUrl": { "type": "string", "maxLength": 500 },
+        "helperVerified": { "type": "boolean" },
+        "helperBloodGroup": { "type": "string", "maxLength": 10 },
+        "acceptanceStatus": {
+          "type": "string",
+          "enum": ["ACCEPTED", "SELECTED", "CONFIRMED", "UNAVAILABLE", "REJECTED", "CANCELLED", "COMPLETED"]
+        },
+        "acceptedAt": { "type": "string", "format": "date-time" },
+        "selectedAt": { "type": "string", "format": "date-time" },
+        "rejectedAt": { "type": "string", "format": "date-time" },
+        "rejectionReason": { "type": "string", "maxLength": 500 },
+        "approximateDistance": { "type": "number" },
+        "estimatedArrival": { "type": "number" },
+        "isSelected": { "type": "boolean" },
+        "matchingRound": { "type": "number" },
+        "currentAvailability": { "type": "string", "maxLength": 60 },
+        "helpCategory": { "type": "string", "maxLength": 60 },
+        "previousHelpCount": { "type": "number" },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "feedback": { "type": "string", "maxLength": 500 },
+        "locationSharing": { "type": "boolean" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "lastLocationUpdate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["acceptanceId", "requestId", "helperId", "helperDisplayName", "acceptanceStatus", "acceptedAt", "matchingRound"]
+    },
+    "DonorProfile": {
+      "title": "DonorProfile",
+      "description": "Public-safe registered blood donor profile with availability, radius, and notification opt-in settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "photoUrl": { "type": "string", "maxLength": 120000 },
+        "bloodGroup": { "type": "string", "enum": ["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] },
+        "bloodGroupVerified": { "type": "boolean" },
+        "accountStatus": { "type": "string", "enum": ["ACTIVE", "SUSPENDED"] },
+        "isAvailable": { "type": "boolean" },
+        "city": { "type": "string", "maxLength": 80 },
+        "approximateArea": { "type": "string", "maxLength": 120 },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "maxDistanceKm": { "type": "number" },
+        "notifyInApp": { "type": "boolean" },
+        "notifyPush": { "type": "boolean" },
+        "notifyEmail": { "type": "boolean" },
+        "notifySms": { "type": "boolean" },
+        "notificationsOptOut": { "type": "boolean" },
+        "lastDonationDate": { "type": "string", "format": "date-time" },
+        "totalDonations": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "bloodGroup", "bloodGroupVerified", "accountStatus", "isAvailable", "city", "maxDistanceKm", "notificationsOptOut", "totalDonations", "updatedAt"]
+    },
+    "BloodRequest": {
+      "title": "BloodRequest",
+      "description": "Privacy-safe blood donation broadcast request and real-time matching status",
+      "type": "object",
+      "properties": {
+        "bloodRequestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "requesterDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "patientDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "requiredBloodGroup": { "type": "string", "enum": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] },
+        "allowCompatibleGroups": { "type": "boolean" },
+        "requiredUnits": { "type": "number" },
+        "fulfilledUnits": { "type": "number" },
+        "confirmedUnits": { "type": "number" },
+        "hospitalName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "hospitalAddress": { "type": "string", "minLength": 2, "maxLength": 240 },
+        "city": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "location": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "requiredDateTime": { "type": "string", "maxLength": 60 },
+        "emergencyLevel": { "type": "string", "enum": ["Normal", "Urgent", "Critical"] },
+        "contactPersonName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "additionalMedicalInfo": { "type": "string", "maxLength": 600 },
+        "status": {
+          "type": "string",
+          "enum": [
+            "REQUEST_SUBMITTED",
+            "SEARCHING_FOR_DONORS",
+            "NOTIFICATIONS_SENT",
+            "DONORS_INTERESTED",
+            "DONOR_SELECTED",
+            "DONATION_SCHEDULED",
+            "DONATION_COMPLETED",
+            "REQUEST_FULFILLED",
+            "REQUEST_CANCELLED"
+          ]
+        },
+        "matchedDonorsCount": { "type": "number" },
+        "notificationsSentCount": { "type": "number" },
+        "interestedDonorsCount": { "type": "number" },
+        "selectedDonorIds": { "type": "array", "items": { "type": "string", "maxLength": 128 }, "maxItems": 20 },
+        "assignedHospitalId": { "type": "string", "maxLength": 64 },
+        "assignedHospitalName": { "type": "string", "maxLength": 140 },
+        "hospitalVerified": { "type": "boolean" },
+        "hospitalStatus": { "type": "string", "maxLength": 60 },
+        "hospitalNotes": { "type": "string", "maxLength": 500 },
+        "fulfilledAt": { "type": "string", "format": "date-time" },
+        "cancellationReason": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "bloodRequestId",
+        "requesterId",
+        "requesterDisplayName",
+        "patientDisplayName",
+        "requiredBloodGroup",
+        "allowCompatibleGroups",
+        "requiredUnits",
+        "fulfilledUnits",
+        "confirmedUnits",
+        "hospitalName",
+        "hospitalAddress",
+        "city",
+        "location",
+        "requiredDateTime",
+        "emergencyLevel",
+        "contactPersonName",
+        "status",
+        "matchedDonorsCount",
+        "notificationsSentCount",
+        "interestedDonorsCount",
+        "selectedDonorIds",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BloodRequestContact": {
+      "title": "BloodRequestContact",
+      "description": "PII-isolated private contact details accessible only to requester, authorized donors, and admin",
+      "type": "object",
+      "properties": {
+        "bloodRequestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "patientFullName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "contactPhoneNumber": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "authorizedDonorIds": { "type": "array", "items": { "type": "string", "maxLength": 128 }, "maxItems": 20 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["bloodRequestId", "requesterId", "patientFullName", "contactPhoneNumber", "authorizedDonorIds", "updatedAt"]
+    },
+    "BloodDonorMatch": {
+      "title": "BloodDonorMatch",
+      "description": "Deterministic per-(request, donor) matching and response record preventing duplicate broadcasts",
+      "type": "object",
+      "properties": {
+        "matchId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "bloodRequestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "donorId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "donorDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "donorPhotoUrl": { "type": "string", "maxLength": 120000 },
+        "donorBloodGroup": { "type": "string", "enum": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] },
+        "donorVerified": { "type": "boolean" },
+        "donorCity": { "type": "string", "maxLength": 80 },
+        "distanceKm": { "type": "number" },
+        "compatibilityType": { "type": "string", "enum": ["EXACT", "COMPATIBLE"] },
+        "matchScore": { "type": "number" },
+        "notificationChannels": { "type": "array", "items": { "type": "string", "maxLength": 20 }, "maxItems": 5 },
+        "responseStatus": {
+          "type": "string",
+          "enum": ["NOTIFIED", "INTERESTED", "SELECTED", "SCHEDULED", "COMPLETED", "REJECTED", "CLOSED_FULFILLED", "CANCELLED"]
+        },
+        "rejectionReason": { "type": "string", "maxLength": 400 },
+        "scheduledDateTime": { "type": "string", "maxLength": 60 },
+        "contactSharedByDonor": { "type": "boolean" },
+        "contactSharedByRequester": { "type": "boolean" },
+        "donorConfirmedAvailable": { "type": "boolean" },
+        "fulfilledUnitsCount": { "type": "number" },
+        "notifiedAt": { "type": "string", "format": "date-time" },
+        "respondedAt": { "type": "string", "format": "date-time" },
+        "selectedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "matchId",
+        "bloodRequestId",
+        "requesterId",
+        "donorId",
+        "donorDisplayName",
+        "donorBloodGroup",
+        "donorVerified",
+        "donorCity",
+        "distanceKm",
+        "compatibilityType",
+        "matchScore",
+        "notificationChannels",
+        "responseStatus",
+        "contactSharedByDonor",
+        "contactSharedByRequester",
+        "donorConfirmedAvailable",
+        "fulfilledUnitsCount",
+        "notifiedAt",
+        "updatedAt"
+      ]
+    },
+    "DonationHistoryRecord": {
+      "title": "DonationHistoryRecord",
+      "description": "Completed blood donation history record",
+      "type": "object",
+      "properties": {
+        "historyId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "bloodRequestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "donorId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "donorDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "requesterDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "hospitalName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "city": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "bloodGroup": { "type": "string", "enum": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] },
+        "unitsDonated": { "type": "number" },
+        "status": { "type": "string", "enum": ["COMPLETED", "VERIFIED"] },
+        "notes": { "type": "string", "maxLength": 500 },
+        "donatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "historyId",
+        "bloodRequestId",
+        "requesterId",
+        "donorId",
+        "donorDisplayName",
+        "requesterDisplayName",
+        "hospitalName",
+        "city",
+        "bloodGroup",
+        "unitsDonated",
+        "status",
+        "donatedAt"
+      ]
+    },
+    "FoodDonation": {
+      "title": "FoodDonation",
+      "description": "Public-safe surplus food donation listing with real-time remaining quantity tracking",
+      "type": "object",
+      "properties": {
+        "donationId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "donorId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "donorName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "donorType": { "type": "string", "enum": ["Individual", "Restaurant", "Hotel", "Bakery", "Supermarket", "Marriage Hall", "Event Organizer", "Food Shop"] },
+        "foodName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "category": { "type": "string", "enum": ["Cooked Food", "Rice and Meals", "Vegetables", "Fruits", "Bread and Bakery", "Packed Food", "Groceries", "Other Food Items"] },
+        "totalQuantity": { "type": "number" },
+        "availableQuantity": { "type": "number" },
+        "quantityUnit": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "servingsCount": { "type": "number" },
+        "preparedAt": { "type": "string", "maxLength": 60 },
+        "collectionDeadline": { "type": "string", "maxLength": 60 },
+        "description": { "type": "string", "minLength": 2, "maxLength": 1000 },
+        "imageUrl": { "type": "string", "maxLength": 450000 },
+        "pickupArea": { "type": "string", "maxLength": 140 },
+        "city": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "location": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "pickupInstructions": { "type": "string", "maxLength": 500 },
+        "safetyConfirmed": { "type": "boolean" },
+        "verified": { "type": "boolean" },
+        "isFlagged": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["Available", "Request Received", "Accepted", "Reserved", "Ready for Pickup", "Collected", "Completed", "Expired", "Cancelled"] },
+        "activeRequestsCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "donationId", "donorId", "donorName", "donorType", "foodName", "category",
+        "totalQuantity", "availableQuantity", "quantityUnit", "servingsCount",
+        "preparedAt", "collectionDeadline", "description", "city", "location",
+        "safetyConfirmed", "verified", "status", "activeRequestsCount", "createdAt", "updatedAt"
+      ]
+    },
+    "FoodDonationPrivateContact": {
+      "title": "FoodDonationPrivateContact",
+      "description": "PII-isolated mobile, exact pickup address, and contact instructions accessible only to donor, authorized receivers, and admin",
+      "type": "object",
+      "properties": {
+        "donationId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "donorId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "mobileNumber": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "contactDetails": { "type": "string", "maxLength": 240 },
+        "pickupAddress": { "type": "string", "minLength": 3, "maxLength": 240 },
+        "authorizedReceiverIds": { "type": "array", "items": { "type": "string", "maxLength": 128 }, "maxItems": 100 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["donationId", "donorId", "mobileNumber", "pickupAddress", "authorizedReceiverIds", "updatedAt"]
+    },
+    "FoodCollectionRequest": {
+      "title": "FoodCollectionRequest",
+      "description": "Receiver collection request against a surplus food donation",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "donationId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "donorId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "donorName": { "type": "string", "maxLength": 80 },
+        "foodName": { "type": "string", "maxLength": 120 },
+        "foodCategory": { "type": "string", "maxLength": 40 },
+        "receiverId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "receiverName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "receiverMobile": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "requestedQuantity": { "type": "number" },
+        "quantityUnit": { "type": "string", "maxLength": 40 },
+        "peopleCount": { "type": "number" },
+        "reason": { "type": "string", "maxLength": 400 },
+        "preferredCollectionTime": { "type": "string", "maxLength": 60 },
+        "pickupLocation": { "type": "string", "maxLength": 140 },
+        "additionalInfo": { "type": "string", "maxLength": 400 },
+        "status": { "type": "string", "enum": ["Pending", "Accepted", "Rejected", "Ready for Pickup", "Collected", "Completed", "Cancelled"] },
+        "rejectionReason": { "type": "string", "maxLength": 400 },
+        "certificateId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "acceptedAt": { "type": "string", "format": "date-time" },
+        "readyAt": { "type": "string", "format": "date-time" },
+        "collectedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "requestId", "donationId", "donorId", "donorName", "foodName", "foodCategory",
+        "receiverId", "receiverName", "receiverMobile", "requestedQuantity", "quantityUnit",
+        "peopleCount", "preferredCollectionTime", "pickupLocation", "status", "createdAt", "updatedAt"
+      ]
+    },
+    "FoodAssistanceRequest": {
+      "title": "FoodAssistanceRequest",
+      "description": "Public food assistance appeal seeking food, financial aid, or volunteer help",
+      "type": "object",
+      "properties": {
+        "assistanceId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "requesterDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "familyMembersCount": { "type": "number" },
+        "peopleRequiringFood": { "type": "number" },
+        "foodRequirement": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "requiredQuantity": { "type": "number" },
+        "fulfilledQuantity": { "type": "number" },
+        "requiredUnit": { "type": "string", "maxLength": 40 },
+        "amountTarget": { "type": "number" },
+        "amountRaised": { "type": "number" },
+        "foodCategory": { "type": "string", "enum": ["Cooked Food", "Rice and Meals", "Vegetables", "Fruits", "Bread and Bakery", "Packed Food", "Groceries", "Other Food Items"] },
+        "city": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "location": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "requiredDate": { "type": "string", "maxLength": 60 },
+        "reason": { "type": "string", "maxLength": 400 },
+        "additionalDetails": { "type": "string", "maxLength": 600 },
+        "urgencyLevel": { "type": "string", "enum": ["Normal", "Urgent", "Critical"] },
+        "verified": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["Submitted", "Searching for Donors", "Contributions Received", "Partially Fulfilled", "Fully Fulfilled", "Completed"] },
+        "contributionsCount": { "type": "number" },
+        "volunteersCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "assistanceId", "requesterId", "requesterDisplayName", "familyMembersCount",
+        "peopleRequiringFood", "foodRequirement", "requiredQuantity", "fulfilledQuantity",
+        "requiredUnit", "amountTarget", "amountRaised", "foodCategory", "city", "location",
+        "requiredDate", "urgencyLevel", "verified", "status", "contributionsCount", "volunteersCount",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "FoodAssistancePrivateContact": {
+      "title": "FoodAssistancePrivateContact",
+      "description": "Protected contact info for food assistance requester",
+      "type": "object",
+      "properties": {
+        "assistanceId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "fullName": { "type": "string", "maxLength": 100 },
+        "mobileNumber": { "type": "string", "maxLength": 30 },
+        "authorizedContributorIds": { "type": "array", "items": { "type": "string", "maxLength": 128 }, "maxItems": 100 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["assistanceId", "requesterId", "fullName", "mobileNumber", "authorizedContributorIds", "updatedAt"]
+    },
+    "FoodContribution": {
+      "title": "FoodContribution",
+      "description": "Public donor food offer toward a FoodAssistanceRequest",
+      "type": "object",
+      "properties": {
+        "contributionId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "assistanceId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "requesterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "donorId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "donorName": { "type": "string", "maxLength": 80 },
+        "foodCategory": { "type": "string", "maxLength": 40 },
+        "foodQuantity": { "type": "number" },
+        "quantityUnit": { "type": "string", "maxLength": 40 },
+        "servings": { "type": "number" },
+        "deliveryMode": { "type": "string", "enum": ["Pickup", "Delivery"] },
+        "contactDetails": { "type": "string", "maxLength": 200 },
+        "status": { "type": "string", "enum": ["Offered", "Accepted", "Delivered", "Completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "contributionId", "assistanceId", "requesterId", "donorId", "donorName",
+        "foodCategory", "foodQuantity", "quantityUnit", "servings", "deliveryMode",
+        "contactDetails", "status", "createdAt"
+      ]
+    },
+    "MoneyDonation": {
+      "title": "MoneyDonation",
+      "description": "Server-verified Razorpay test-mode money contribution record",
+      "type": "object",
+      "properties": {
+        "donationTxId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "orderId": { "type": "string", "maxLength": 100 },
+        "razorpayPaymentId": { "type": "string", "maxLength": 100 },
+        "donorId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "donorName": { "type": "string", "maxLength": 80 },
+        "isAnonymous": { "type": "boolean" },
+        "assistanceId": { "type": "string", "maxLength": 64 },
+        "assistanceTitle": { "type": "string", "maxLength": 160 },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "enum": ["INR"] },
+        "paymentMethod": { "type": "string", "enum": ["UPI", "Card", "NetBanking"] },
+        "status": { "type": "string", "enum": ["VERIFIED", "FAILED"] },
+        "providerMode": { "type": "string", "enum": ["RAZORPAY_TEST"] },
+        "receiptNumber": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "verifiedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "donationTxId", "orderId", "razorpayPaymentId", "donorId", "donorName",
+        "isAnonymous", "assistanceId", "assistanceTitle", "amount", "currency",
+        "paymentMethod", "status", "providerMode", "receiptNumber", "createdAt", "verifiedAt"
+      ]
+    },
+    "VolunteerRegistration": {
+      "title": "VolunteerRegistration",
+      "description": "Registered volunteer offering food rescue pickup, distribution, or elderly support",
+      "type": "object",
+      "properties": {
+        "volunteerId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "volunteerName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "mobile": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "city": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "role": { "type": "string", "enum": ["Food Pickup", "Food Transportation", "Food Distribution", "Helping Elderly People", "Delivering Nearby"] },
+        "assistanceId": { "type": "string", "maxLength": 64 },
+        "availability": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["ACTIVE", "ASSIGNED", "COMPLETED", "SUSPENDED"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["volunteerId", "userId", "volunteerName", "mobile", "city", "role", "availability", "status", "createdAt"]
+    },
+    "FoodDonationCertificate": {
+      "title": "FoodDonationCertificate",
+      "description": "Immutable digital proof of completed food rescue handover",
+      "type": "object",
+      "properties": {
+        "certificateId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "donationId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "collectionRequestId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "donorId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "donorName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "receiverId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "receiverName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "foodName": { "type": "string", "maxLength": 120 },
+        "foodCategory": { "type": "string", "maxLength": 40 },
+        "quantityDelivered": { "type": "number" },
+        "quantityUnit": { "type": "string", "maxLength": 40 },
+        "city": { "type": "string", "maxLength": 80 },
+        "verificationToken": { "type": "string", "minLength": 10, "maxLength": 128 },
+        "status": { "type": "string", "enum": ["VALID", "SUSPENDED"] },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "generatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "certificateId", "donationId", "collectionRequestId", "donorId", "donorName",
+        "receiverId", "receiverName", "foodName", "foodCategory", "quantityDelivered",
+        "quantityUnit", "city", "verificationToken", "status", "completedAt", "generatedAt"
+      ]
+    },
+    "HospitalOrganization": {
+      "title": "HospitalOrganization",
+      "description": "Registered Hospital managed by Admin Portal",
+      "type": "object",
+      "properties": {
+        "hospitalId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "name": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "registrationNumber": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "address": { "type": "string", "minLength": 2, "maxLength": 240 },
+        "city": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "state": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "contactPerson": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "mobile": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "username": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "authUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["hospitalId", "name", "registrationNumber", "address", "city", "state", "contactPerson", "mobile", "email", "username", "authUid", "status", "createdBy", "createdAt", "updatedAt"]
+    },
+    "HospitalUser": {
+      "title": "HospitalUser",
+      "description": "Role binding document authenticating a Hospital Portal user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "hospitalId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "hospitalName": { "type": "string", "maxLength": 140 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "username": { "type": "string", "maxLength": 60 },
+        "role": { "type": "string", "enum": ["HOSPITAL"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "hospitalId", "hospitalName", "email", "username", "role", "status", "createdAt", "updatedAt"]
+    },
+    "HomeageOrganization": {
+      "title": "HomeageOrganization",
+      "description": "Registered Food Donation Homeage organization managed by Admin Portal",
+      "type": "object",
+      "properties": {
+        "homeageId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "name": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "registrationNumber": { "type": "string", "maxLength": 80 },
+        "contactPerson": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "mobile": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "address": { "type": "string", "minLength": 2, "maxLength": 240 },
+        "city": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "state": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "username": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "authUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["homeageId", "name", "contactPerson", "mobile", "email", "address", "city", "state", "username", "authUid", "status", "createdBy", "createdAt", "updatedAt"]
+    },
+    "HomeageUser": {
+      "title": "HomeageUser",
+      "description": "Role binding document authenticating a Food Homeage Portal user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "homeageId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "homeageName": { "type": "string", "maxLength": 140 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "username": { "type": "string", "maxLength": 60 },
+        "role": { "type": "string", "enum": ["HOMEAGE"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "homeageId", "homeageName", "email", "username", "role", "status", "createdAt", "updatedAt"]
+    },
+    "OrgUsername": {
+      "title": "OrgUsername",
+      "description": "Username-to-email resolver for Hospital and Homeage portal sign-in",
+      "type": "object",
+      "properties": {
+        "usernameLower": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "role": { "type": "string", "enum": ["HOSPITAL", "HOMEAGE"] },
+        "orgId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["usernameLower", "email", "role", "orgId", "createdAt"]
+    },
+    "DoctorProfile": {
+      "title": "DoctorProfile",
+      "description": "Hospital doctor directory profile published to Normal Users Find Doctors page",
+      "type": "object",
+      "properties": {
+        "doctorId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "hospitalId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "hospitalName": { "type": "string", "maxLength": 140 },
+        "city": { "type": "string", "maxLength": 80 },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "specialty": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "qualification": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "experienceYears": { "type": "number" },
+        "consultationFee": { "type": "number" },
+        "bio": { "type": "string", "maxLength": 600 },
+        "availabilityDays": { "type": "array", "items": { "type": "string", "maxLength": 20 }, "maxItems": 7 },
+        "availabilitySlots": { "type": "array", "items": { "type": "string", "maxLength": 30 }, "maxItems": 20 },
+        "isAvailable": { "type": "boolean" },
+        "isPublished": { "type": "boolean" },
+        "verified": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["doctorId", "hospitalId", "hospitalName", "city", "name", "specialty", "qualification", "experienceYears", "consultationFee", "availabilityDays", "availabilitySlots", "isAvailable", "isPublished", "verified", "createdAt", "updatedAt"]
+    },
+    "DoctorAppointment": {
+      "title": "DoctorAppointment",
+      "description": "Normal user appointment booking with a verified hospital doctor",
+      "type": "object",
+      "properties": {
+        "appointmentId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "doctorId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "doctorName": { "type": "string", "maxLength": 100 },
+        "specialty": { "type": "string", "maxLength": 80 },
+        "hospitalId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 64 },
+        "hospitalName": { "type": "string", "maxLength": 140 },
+        "patientId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "patientName": { "type": "string", "maxLength": 80 },
+        "patientMobile": { "type": "string", "maxLength": 30 },
+        "appointmentDate": { "type": "string", "maxLength": 40 },
+        "timeSlot": { "type": "string", "maxLength": 40 },
+        "reason": { "type": "string", "maxLength": 400 },
+        "status": { "type": "string", "enum": ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["appointmentId", "doctorId", "doctorName", "specialty", "hospitalId", "hospitalName", "patientId", "patientName", "patientMobile", "appointmentDate", "timeSlot", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublic" },
+      "description": "Public-safe user profile and statistics"
+    },
+    "/users/{userId}/private/info": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Private PII isolated to account owner and admins"
+    },
+    "/hospitals/{hospitalId}": {
+      "schema": { "$ref": "#/entities/HospitalOrganization" },
+      "description": "Registered hospitals managed by centralized Admin Portal"
+    },
+    "/hospital_users/{userId}": {
+      "schema": { "$ref": "#/entities/HospitalUser" },
+      "description": "Hospital staff role binding records"
+    },
+    "/homeage_organizations/{homeageId}": {
+      "schema": { "$ref": "#/entities/HomeageOrganization" },
+      "description": "Registered Food Donation Homeage organizations managed by centralized Admin Portal"
+    },
+    "/homeage_users/{userId}": {
+      "schema": { "$ref": "#/entities/HomeageUser" },
+      "description": "Food Homeage staff role binding records"
+    },
+    "/org_usernames/{usernameLower}": {
+      "schema": { "$ref": "#/entities/OrgUsername" },
+      "description": "Username-to-email lookup for Hospital and Homeage logins"
+    },
+    "/doctors/{doctorId}": {
+      "schema": { "$ref": "#/entities/DoctorProfile" },
+      "description": "Doctors registered and published by hospitals"
+    },
+    "/doctor_appointments/{appointmentId}": {
+      "schema": { "$ref": "#/entities/DoctorAppointment" },
+      "description": "Patient appointments with hospital doctors"
+    },
+    "/donor_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/DonorProfile" },
+      "description": "Public-safe registered blood donor profiles without PII"
+    },
+    "/blood_requests/{bloodRequestId}": {
+      "schema": { "$ref": "#/entities/BloodRequest" },
+      "description": "Blood donation broadcast requests and matching progress"
+    },
+    "/blood_requests/{bloodRequestId}/private/contact": {
+      "schema": { "$ref": "#/entities/BloodRequestContact" },
+      "description": "Protected patient full name and phone number revealed only to authorized donors and hospitals"
+    },
+    "/blood_donor_matches/{matchId}": {
+      "schema": { "$ref": "#/entities/BloodDonorMatch" },
+      "description": "Individual donor matching, broadcast deduplication, and response tracking records"
+    },
+    "/donation_history/{historyId}": {
+      "schema": { "$ref": "#/entities/DonationHistoryRecord" },
+      "description": "Completed blood donation records"
+    },
+    "/help_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/HelpRequest" },
+      "description": "Community help requests and completion workflow state"
+    },
+    "/helper_acceptances/{acceptanceId}": {
+      "schema": { "$ref": "#/entities/HelperAcceptance" },
+      "description": "Multiple helper acceptances up to 3 per matching round"
+    },
+    "/help_completion_submissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/HelpCompletionSubmission" },
+      "description": "Helper completion notes and optional supporting evidence"
+    },
+    "/help_confirmations/{requestId}": {
+      "schema": { "$ref": "#/entities/HelpConfirmation" },
+      "description": "Requester confirmation, rating, and optional feedback keyed by requestId"
+    },
+    "/digital_proofs/{proofId}": {
+      "schema": { "$ref": "#/entities/DigitalProof" },
+      "description": "Confirmed Digital Proof of Help verification records"
+    },
+    "/help_issues/{issueId}": {
+      "schema": { "$ref": "#/entities/HelpIssue" },
+      "description": "Reported assistance issues and admin review status"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Real-time notifications scoped to target user"
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable append-only audit trail"
+    },
+    "/chat_messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Real-time coordination chat messages between requester and helper or blood donor or food participants"
+    },
+    "/account_identifiers/{hashId}": {
+      "schema": { "$ref": "#/entities/AccountIdentifier" },
+      "description": "SHA-256 hashed duplicate prevention registry without PII"
+    },
+    "/food_donations/{donationId}": {
+      "schema": { "$ref": "#/entities/FoodDonation" },
+      "description": "Surplus food donations available for community collection and Homeage rescue"
+    },
+    "/food_donations/{donationId}/private/contact": {
+      "schema": { "$ref": "#/entities/FoodDonationPrivateContact" },
+      "description": "Protected donor mobile and exact pickup address"
+    },
+    "/food_collection_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/FoodCollectionRequest" },
+      "description": "Food receiver and Homeage collection requests against donor listings"
+    },
+    "/food_assistance_requests/{assistanceId}": {
+      "schema": { "$ref": "#/entities/FoodAssistanceRequest" },
+      "description": "Community food assistance appeals routed to Homeage organizations"
+    },
+    "/food_assistance_requests/{assistanceId}/private/contact": {
+      "schema": { "$ref": "#/entities/FoodAssistancePrivateContact" },
+      "description": "Protected requester full name and mobile"
+    },
+    "/food_contributions/{contributionId}": {
+      "schema": { "$ref": "#/entities/FoodContribution" },
+      "description": "Direct food pledges for assistance appeals"
+    },
+    "/money_donations/{donationTxId}": {
+      "schema": { "$ref": "#/entities/MoneyDonation" },
+      "description": "Verified Razorpay test-mode money contributions"
+    },
+    "/volunteer_registrations/{volunteerId}": {
+      "schema": { "$ref": "#/entities/VolunteerRegistration" },
+      "description": "Volunteer registrations for food rescue logistics"
+    },
+    "/food_donation_certificates/{certificateId}": {
+      "schema": { "$ref": "#/entities/FoodDonationCertificate" },
+      "description": "Digital proof certificates for completed food handovers"
+    }
+  }
+}

@@ -1,0 +1,2039 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core helper primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn();
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == 'ziamizan001@gmail.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isHospitalUser() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/hospital_users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/hospital_users/$(request.auth.uid)).data.status == 'ACTIVE';
+    }
+
+    function isHomeageUser() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/homeage_users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/homeage_users/$(request.auth.uid)).data.status == 'ACTIVE';
+    }
+
+    function hospitalOrgId() {
+      return get(/databases/$(database)/documents/hospital_users/$(request.auth.uid)).data.hospitalId;
+    }
+
+    function homeageOrgId() {
+      return get(/databases/$(database)/documents/homeage_users/$(request.auth.uid)).data.homeageId;
+    }
+
+    function isValidHospitalBloodStatus(st) {
+      return st in [
+        'Submitted',
+        'Under Hospital Verification',
+        'Donor Search Started',
+        'Donors Available',
+        'Donation Scheduled',
+        'Donation Completed',
+        'Request Fulfilled',
+        'Cancelled'
+      ];
+    }
+
+    function isValidHomeageFoodRequestStatus(st) {
+      return st in [
+        'Submitted',
+        'Waiting for Homeage',
+        'Accepted',
+        'Food Arranged',
+        'Distribution Scheduled',
+        'Out for Delivery',
+        'Successfully Delivered',
+        'Completed',
+        'Rejected',
+        'Cancelled'
+      ];
+    }
+
+    function isValidCategory(cat) {
+      return cat in [
+        'Emergency', 'Blood', 'Money', 'Food', 'Medicine',
+        'Transport', 'Education', 'Shelter', 'Volunteer', 'Other'
+      ];
+    }
+
+    function isValidBloodGroup(bg) {
+      return bg in ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+    }
+
+    function isValidRequestStatus(st) {
+      return st in [
+        'REQUESTED',
+        'OPEN',
+        'WAITING_FOR_HELPERS',
+        'ONE_HELPER_ACCEPTED',
+        'TWO_HELPERS_ACCEPTED',
+        'THREE_HELPERS_FOUND',
+        'AWAITING_RECEIVER_SELECTION',
+        'HELPER_SELECTED',
+        'CONFIRMED',
+        'HELPER_UNAVAILABLE',
+        'BACKUP_SELECTION_REQUIRED',
+        'ON_THE_WAY',
+        'ARRIVED',
+        'ASSISTANCE_IN_PROGRESS',
+        'ACCEPTED',
+        'IN_PROGRESS',
+        'AWAITING_CONFIRMATION',
+        'COMPLETED_CONFIRMED',
+        'COMPLETED',
+        'COMPLETED_UNCONFIRMED',
+        'REOPENED',
+        'ISSUE_REPORTED',
+        'UNDER_REVIEW',
+        'CANCELLED'
+      ];
+    }
+
+    function isValidBloodRequestStatus(st) {
+      return st in [
+        'REQUEST_SUBMITTED',
+        'SEARCHING_FOR_DONORS',
+        'NOTIFICATIONS_SENT',
+        'DONORS_INTERESTED',
+        'DONOR_SELECTED',
+        'DONATION_SCHEDULED',
+        'DONATION_COMPLETED',
+        'REQUEST_FULFILLED',
+        'REQUEST_CANCELLED'
+      ];
+    }
+
+    function isValidDonorResponseStatus(st) {
+      return st in [
+        'NOTIFIED',
+        'INTERESTED',
+        'SELECTED',
+        'SCHEDULED',
+        'COMPLETED',
+        'REJECTED',
+        'CLOSED_FULFILLED',
+        'CANCELLED'
+      ];
+    }
+
+    function isValidUserPublic(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'verified', 'peopleHelped', 'requestsCompleted', 'volunteerHours', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'photoUrl', 'bloodGroup', 'approximateArea', 'canProvide', 'verified', 'peopleHelped', 'requestsCompleted', 'volunteerHours', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.verified is bool
+        && data.peopleHelped is number && data.peopleHelped >= 0
+        && data.requestsCompleted is number && data.requestsCompleted >= 0
+        && data.volunteerHours is number && data.volunteerHours >= 0
+        && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 120000))
+        && (!('bloodGroup' in data) || data.bloodGroup == null || (data.bloodGroup is string && data.bloodGroup.size() <= 10))
+        && (!('approximateArea' in data) || data.approximateArea == null || (data.approximateArea is string && data.approximateArea.size() <= 120))
+        && (!('canProvide' in data) || (data.canProvide is list && data.canProvide.size() <= 15 && (data.canProvide.size() == 0 || data.canProvide[0] is string)))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivate(data) {
+      return data.keys().hasAll(['uid', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'mobile', 'city', 'state', 'fullLocation', 'helpCategories', 'mobileVerified', 'termsAcceptedAt', 'updatedAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128
+        && (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 200))
+        && (!('mobile' in data) || data.mobile == null || (data.mobile is string && data.mobile.size() <= 30))
+        && (!('city' in data) || data.city == null || (data.city is string && data.city.size() <= 80))
+        && (!('state' in data) || data.state == null || (data.state is string && data.state.size() <= 80))
+        && (!('fullLocation' in data) || data.fullLocation == null || (data.fullLocation is string && data.fullLocation.size() <= 200))
+        && (!('helpCategories' in data) || (data.helpCategories is list && data.helpCategories.size() <= 15 && (data.helpCategories.size() == 0 || data.helpCategories[0] is string)))
+        && (!('mobileVerified' in data) || data.mobileVerified is bool)
+        && (!('termsAcceptedAt' in data) || data.termsAcceptedAt == null || data.termsAcceptedAt is timestamp)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDonorProfile(data) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'bloodGroup', 'bloodGroupVerified', 'accountStatus',
+          'isAvailable', 'city', 'maxDistanceKm', 'notifyInApp', 'notifyPush',
+          'notifyEmail', 'notifySms', 'notificationsOptOut', 'totalDonations', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'photoUrl', 'bloodGroup', 'bloodGroupVerified', 'accountStatus',
+          'isAvailable', 'city', 'approximateArea', 'latitude', 'longitude', 'maxDistanceKm',
+          'notifyInApp', 'notifyPush', 'notifyEmail', 'notifySms', 'notificationsOptOut',
+          'lastDonationDate', 'totalDonations', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 120000))
+        && (data.bloodGroup == '' || isValidBloodGroup(data.bloodGroup))
+        && data.bloodGroupVerified is bool
+        && data.accountStatus in ['ACTIVE', 'SUSPENDED']
+        && data.isAvailable is bool
+        && data.city is string && data.city.size() <= 80
+        && (!('approximateArea' in data) || data.approximateArea == null || (data.approximateArea is string && data.approximateArea.size() <= 120))
+        && (!('latitude' in data) || data.latitude is number)
+        && (!('longitude' in data) || data.longitude is number)
+        && data.maxDistanceKm is number && data.maxDistanceKm >= 1 && data.maxDistanceKm <= 500
+        && data.notifyInApp is bool
+        && data.notifyPush is bool
+        && data.notifyEmail is bool
+        && data.notifySms is bool
+        && data.notificationsOptOut is bool
+        && (!('lastDonationDate' in data) || data.lastDonationDate == null || data.lastDonationDate is timestamp)
+        && data.totalDonations is number && data.totalDonations >= 0 && data.totalDonations <= 1000
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBloodRequest(data) {
+      return data.keys().hasAll([
+          'bloodRequestId', 'requesterId', 'requesterDisplayName', 'patientDisplayName',
+          'requiredBloodGroup', 'allowCompatibleGroups', 'requiredUnits', 'fulfilledUnits', 'confirmedUnits',
+          'hospitalName', 'hospitalAddress', 'city', 'location', 'requiredDateTime',
+          'emergencyLevel', 'contactPersonName', 'status', 'matchedDonorsCount',
+          'notificationsSentCount', 'interestedDonorsCount', 'selectedDonorIds', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'bloodRequestId', 'requesterId', 'requesterDisplayName', 'patientDisplayName',
+          'requiredBloodGroup', 'allowCompatibleGroups', 'requiredUnits', 'fulfilledUnits', 'confirmedUnits',
+          'hospitalName', 'hospitalAddress', 'city', 'location', 'latitude', 'longitude', 'requiredDateTime',
+          'emergencyLevel', 'contactPersonName', 'additionalMedicalInfo', 'status', 'matchedDonorsCount',
+          'notificationsSentCount', 'interestedDonorsCount', 'selectedDonorIds',
+          'assignedHospitalId', 'assignedHospitalName', 'hospitalVerified', 'hospitalStatus', 'hospitalNotes',
+          'fulfilledAt', 'cancellationReason', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.bloodRequestId)
+        && isValidId(data.requesterId)
+        && data.requesterDisplayName is string && data.requesterDisplayName.size() >= 1 && data.requesterDisplayName.size() <= 80
+        && data.patientDisplayName is string && data.patientDisplayName.size() >= 1 && data.patientDisplayName.size() <= 80
+        && isValidBloodGroup(data.requiredBloodGroup)
+        && data.allowCompatibleGroups is bool
+        && data.requiredUnits is number && data.requiredUnits >= 1 && data.requiredUnits <= 20
+        && data.fulfilledUnits is number && data.fulfilledUnits >= 0 && data.fulfilledUnits <= 20
+        && data.confirmedUnits is number && data.confirmedUnits >= 0 && data.confirmedUnits <= 20
+        && data.hospitalName is string && data.hospitalName.size() >= 2 && data.hospitalName.size() <= 140
+        && data.hospitalAddress is string && data.hospitalAddress.size() >= 2 && data.hospitalAddress.size() <= 240
+        && data.city is string && data.city.size() >= 2 && data.city.size() <= 80
+        && data.location is string && data.location.size() >= 2 && data.location.size() <= 140
+        && (!('latitude' in data) || data.latitude is number)
+        && (!('longitude' in data) || data.longitude is number)
+        && data.requiredDateTime is string && data.requiredDateTime.size() >= 4 && data.requiredDateTime.size() <= 60
+        && data.emergencyLevel in ['Normal', 'Urgent', 'Critical']
+        && data.contactPersonName is string && data.contactPersonName.size() >= 1 && data.contactPersonName.size() <= 80
+        && (!('additionalMedicalInfo' in data) || data.additionalMedicalInfo == null || (data.additionalMedicalInfo is string && data.additionalMedicalInfo.size() <= 600))
+        && isValidBloodRequestStatus(data.status)
+        && data.matchedDonorsCount is number && data.matchedDonorsCount >= 0 && data.matchedDonorsCount <= 5000
+        && data.notificationsSentCount is number && data.notificationsSentCount >= 0 && data.notificationsSentCount <= 5000
+        && data.interestedDonorsCount is number && data.interestedDonorsCount >= 0 && data.interestedDonorsCount <= 5000
+        && data.selectedDonorIds is list && data.selectedDonorIds.size() <= 20 && (data.selectedDonorIds.size() == 0 || data.selectedDonorIds[0] is string)
+        && (!('assignedHospitalId' in data) || data.assignedHospitalId == null || (data.assignedHospitalId is string && data.assignedHospitalId.size() <= 128))
+        && (!('assignedHospitalName' in data) || data.assignedHospitalName == null || (data.assignedHospitalName is string && data.assignedHospitalName.size() <= 140))
+        && (!('hospitalVerified' in data) || data.hospitalVerified is bool)
+        && (!('hospitalStatus' in data) || data.hospitalStatus == null || isValidHospitalBloodStatus(data.hospitalStatus))
+        && (!('hospitalNotes' in data) || data.hospitalNotes == null || (data.hospitalNotes is string && data.hospitalNotes.size() <= 600))
+        && (!('fulfilledAt' in data) || data.fulfilledAt == null || data.fulfilledAt is timestamp)
+        && (!('cancellationReason' in data) || data.cancellationReason == null || (data.cancellationReason is string && data.cancellationReason.size() <= 400))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBloodRequestContact(data) {
+      return data.keys().hasAll(['bloodRequestId', 'requesterId', 'patientFullName', 'contactPhoneNumber', 'authorizedDonorIds', 'updatedAt'])
+        && data.keys().hasOnly(['bloodRequestId', 'requesterId', 'patientFullName', 'contactPhoneNumber', 'authorizedDonorIds', 'updatedAt'])
+        && isValidId(data.bloodRequestId)
+        && isValidId(data.requesterId)
+        && data.patientFullName is string && data.patientFullName.size() >= 1 && data.patientFullName.size() <= 100
+        && data.contactPhoneNumber is string && data.contactPhoneNumber.size() >= 4 && data.contactPhoneNumber.size() <= 30
+        && data.authorizedDonorIds is list && data.authorizedDonorIds.size() <= 20 && (data.authorizedDonorIds.size() == 0 || data.authorizedDonorIds[0] is string)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBloodDonorMatch(data) {
+      return data.keys().hasAll([
+          'matchId', 'bloodRequestId', 'requesterId', 'donorId', 'donorDisplayName',
+          'donorBloodGroup', 'donorVerified', 'donorCity', 'distanceKm', 'compatibilityType',
+          'matchScore', 'notificationChannels', 'responseStatus', 'contactSharedByDonor',
+          'contactSharedByRequester', 'donorConfirmedAvailable', 'fulfilledUnitsCount',
+          'notifiedAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'matchId', 'bloodRequestId', 'requesterId', 'donorId', 'donorDisplayName', 'donorPhotoUrl',
+          'donorBloodGroup', 'donorVerified', 'donorCity', 'donorArea', 'donorPhone', 'donorEmail', 'donorNotes',
+          'distanceKm', 'compatibilityType',
+          'matchScore', 'notificationChannels', 'responseStatus', 'rejectionReason', 'scheduledDateTime',
+          'contactSharedByDonor', 'contactSharedByRequester', 'donorConfirmedAvailable', 'fulfilledUnitsCount',
+          'notifiedAt', 'respondedAt', 'selectedAt', 'completedAt', 'updatedAt'
+        ])
+        && isValidId(data.matchId)
+        && isValidId(data.bloodRequestId)
+        && isValidId(data.requesterId)
+        && isValidId(data.donorId)
+        && data.donorDisplayName is string && data.donorDisplayName.size() >= 1 && data.donorDisplayName.size() <= 80
+        && (!('donorPhotoUrl' in data) || data.donorPhotoUrl == null || (data.donorPhotoUrl is string && data.donorPhotoUrl.size() <= 120000))
+        && isValidBloodGroup(data.donorBloodGroup)
+        && data.donorVerified is bool
+        && data.donorCity is string && data.donorCity.size() <= 80
+        && (!('donorArea' in data) || data.donorArea == null || (data.donorArea is string && data.donorArea.size() <= 140))
+        && (!('donorPhone' in data) || data.donorPhone == null || (data.donorPhone is string && data.donorPhone.size() <= 30))
+        && (!('donorEmail' in data) || data.donorEmail == null || (data.donorEmail is string && data.donorEmail.size() <= 160))
+        && (!('donorNotes' in data) || data.donorNotes == null || (data.donorNotes is string && data.donorNotes.size() <= 400))
+        && data.distanceKm is number && data.distanceKm >= 0 && data.distanceKm <= 2000
+        && data.compatibilityType in ['EXACT', 'COMPATIBLE']
+        && data.matchScore is number && data.matchScore >= 0 && data.matchScore <= 500
+        && data.notificationChannels is list && data.notificationChannels.size() <= 5 && (data.notificationChannels.size() == 0 || data.notificationChannels[0] is string)
+        && isValidDonorResponseStatus(data.responseStatus)
+        && (!('rejectionReason' in data) || data.rejectionReason == null || (data.rejectionReason is string && data.rejectionReason.size() <= 400))
+        && (!('scheduledDateTime' in data) || data.scheduledDateTime == null || (data.scheduledDateTime is string && data.scheduledDateTime.size() <= 60))
+        && data.contactSharedByDonor is bool
+        && data.contactSharedByRequester is bool
+        && data.donorConfirmedAvailable is bool
+        && data.fulfilledUnitsCount is number && data.fulfilledUnitsCount >= 0 && data.fulfilledUnitsCount <= 20
+        && data.notifiedAt is timestamp
+        && (!('respondedAt' in data) || data.respondedAt == null || data.respondedAt is timestamp)
+        && (!('selectedAt' in data) || data.selectedAt == null || data.selectedAt is timestamp)
+        && (!('completedAt' in data) || data.completedAt == null || data.completedAt is timestamp)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDonationHistory(data) {
+      return data.keys().hasAll([
+          'historyId', 'bloodRequestId', 'requesterId', 'donorId', 'donorDisplayName',
+          'requesterDisplayName', 'hospitalName', 'city', 'bloodGroup', 'unitsDonated',
+          'status', 'donatedAt'
+        ])
+        && data.keys().hasOnly([
+          'historyId', 'bloodRequestId', 'requesterId', 'donorId', 'donorDisplayName',
+          'requesterDisplayName', 'hospitalName', 'city', 'bloodGroup', 'unitsDonated',
+          'status', 'notes', 'donatedAt'
+        ])
+        && isValidId(data.historyId)
+        && isValidId(data.bloodRequestId)
+        && isValidId(data.requesterId)
+        && isValidId(data.donorId)
+        && data.donorDisplayName is string && data.donorDisplayName.size() >= 1 && data.donorDisplayName.size() <= 80
+        && data.requesterDisplayName is string && data.requesterDisplayName.size() >= 1 && data.requesterDisplayName.size() <= 80
+        && data.hospitalName is string && data.hospitalName.size() >= 2 && data.hospitalName.size() <= 140
+        && data.city is string && data.city.size() >= 1 && data.city.size() <= 80
+        && isValidBloodGroup(data.bloodGroup)
+        && data.unitsDonated is number && data.unitsDonated >= 1 && data.unitsDonated <= 20
+        && data.status in ['COMPLETED', 'VERIFIED']
+        && (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 500))
+        && data.donatedAt is timestamp;
+    }
+
+    function isValidHelpRequest(data) {
+      return data.keys().hasAll(['requestId', 'requesterId', 'requesterDisplayName', 'title', 'description', 'category', 'location', 'urgency', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'requestId', 'requesterId', 'requesterDisplayName',
+          'helperId', 'helperDisplayName', 'helperVerified',
+          'title', 'description', 'category', 'location', 'urgency',
+          'bloodGroup', 'units', 'amountNeeded', 'amountCollected',
+          'status', 'createdAt', 'acceptedAt', 'journeyStartedAt', 'arrivedAt', 'assistanceStartedAt', 'completedAt', 'confirmedAt', 'cancellationReason', 'updatedAt',
+          'acceptedCount', 'remainingSlots', 'matchingRound', 'selectedHelperId', 'acceptanceClosed', 'reopenedAt'
+        ])
+        && isValidId(data.requestId)
+        && data.requesterId is string && data.requesterId.size() >= 1 && data.requesterId.size() <= 128
+        && data.requesterDisplayName is string && data.requesterDisplayName.size() >= 1 && data.requesterDisplayName.size() <= 80
+        && (!('helperId' in data) || data.helperId == null || (data.helperId is string && data.helperId.size() >= 1 && data.helperId.size() <= 128))
+        && (!('helperDisplayName' in data) || data.helperDisplayName == null || (data.helperDisplayName is string && data.helperDisplayName.size() <= 80))
+        && (!('helperVerified' in data) || data.helperVerified is bool)
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 140
+        && data.description is string && data.description.size() >= 3 && data.description.size() <= 1000
+        && isValidCategory(data.category)
+        && data.location is string && data.location.size() >= 1 && data.location.size() <= 140
+        && data.urgency in ['Normal', 'High', 'Urgent', 'Immediate']
+        && (!('bloodGroup' in data) || data.bloodGroup == null || (data.bloodGroup is string && data.bloodGroup.size() <= 10))
+        && (!('units' in data) || data.units == null || (data.units is number && data.units >= 0 && data.units <= 100))
+        && (!('amountNeeded' in data) || data.amountNeeded == null || (data.amountNeeded is number && data.amountNeeded >= 0 && data.amountNeeded <= 10000000))
+        && (!('amountCollected' in data) || data.amountCollected == null || (data.amountCollected is number && data.amountCollected >= 0 && data.amountCollected <= 10000000))
+        && isValidRequestStatus(data.status)
+        && (!('acceptedCount' in data) || data.acceptedCount == null || (data.acceptedCount is number && data.acceptedCount >= 0 && data.acceptedCount <= 3))
+        && (!('remainingSlots' in data) || data.remainingSlots == null || (data.remainingSlots is number && data.remainingSlots >= 0 && data.remainingSlots <= 3))
+        && (!('matchingRound' in data) || data.matchingRound == null || (data.matchingRound is number && data.matchingRound >= 1 && data.matchingRound <= 50))
+        && (!('selectedHelperId' in data) || data.selectedHelperId == null || (data.selectedHelperId is string && data.selectedHelperId.size() <= 128))
+        && (!('acceptanceClosed' in data) || data.acceptanceClosed == null || data.acceptanceClosed is bool)
+        && (!('reopenedAt' in data) || data.reopenedAt == null || data.reopenedAt is timestamp)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (!('acceptedAt' in data) || data.acceptedAt == null || data.acceptedAt is timestamp)
+        && (!('journeyStartedAt' in data) || data.journeyStartedAt == null || data.journeyStartedAt is timestamp)
+        && (!('arrivedAt' in data) || data.arrivedAt == null || data.arrivedAt is timestamp)
+        && (!('assistanceStartedAt' in data) || data.assistanceStartedAt == null || data.assistanceStartedAt is timestamp)
+        && (!('completedAt' in data) || data.completedAt == null || data.completedAt is timestamp)
+        && (!('confirmedAt' in data) || data.confirmedAt == null || data.confirmedAt is timestamp)
+        && (!('cancellationReason' in data) || data.cancellationReason == null || (data.cancellationReason is string && data.cancellationReason.size() <= 500));
+    }
+
+    function isValidCompletionSubmission(data) {
+      return data.keys().hasAll(['requestId', 'requesterId', 'helperId', 'submittedAt'])
+        && data.keys().hasOnly(['requestId', 'requesterId', 'helperId', 'completionDescription', 'evidenceDataUrl', 'evidenceFileName', 'submittedAt'])
+        && isValidId(data.requestId)
+        && data.requesterId is string && data.requesterId.size() >= 1 && data.requesterId.size() <= 128
+        && data.helperId is string && data.helperId.size() >= 1 && data.helperId.size() <= 128
+        && (!('completionDescription' in data) || data.completionDescription == null || (data.completionDescription is string && data.completionDescription.size() <= 1000))
+        && (!('evidenceDataUrl' in data) || data.evidenceDataUrl == null || (data.evidenceDataUrl is string && data.evidenceDataUrl.size() <= 550000 && data.evidenceDataUrl.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')))
+        && (!('evidenceFileName' in data) || data.evidenceFileName == null || (data.evidenceFileName is string && data.evidenceFileName.size() <= 120))
+        && data.submittedAt is timestamp;
+    }
+
+    function isValidHelpConfirmation(data) {
+      return data.keys().hasAll(['requestId', 'requesterId', 'helperId', 'confirmationStatus', 'confirmedAt'])
+        && data.keys().hasOnly(['requestId', 'requesterId', 'helperId', 'confirmationStatus', 'feedback', 'rating', 'appreciationMessage', 'explanation', 'confirmedAt'])
+        && isValidId(data.requestId)
+        && data.requesterId is string && data.requesterId.size() >= 1 && data.requesterId.size() <= 128
+        && data.helperId is string && data.helperId.size() >= 1 && data.helperId.size() <= 128
+        && data.confirmationStatus in ['CONFIRMED', 'NOT_YET_RECEIVED', 'ISSUE_REPORTED']
+        && (!('feedback' in data) || data.feedback == null || (data.feedback is string && data.feedback.size() <= 600))
+        && (!('rating' in data) || data.rating == null || (data.rating is number && data.rating >= 1 && data.rating <= 5))
+        && (!('appreciationMessage' in data) || data.appreciationMessage == null || (data.appreciationMessage is string && data.appreciationMessage.size() <= 300))
+        && (!('explanation' in data) || data.explanation == null || (data.explanation is string && data.explanation.size() <= 600))
+        && data.confirmedAt is timestamp;
+    }
+
+    function isValidDigitalProof(data) {
+      return data.keys().hasAll([
+          'proofId', 'requestId', 'requesterId', 'helperId',
+          'requestTitle', 'category', 'requesterDisplayName', 'helperDisplayName',
+          'verificationToken', 'proofStatus', 'generatedAt'
+        ])
+        && data.keys().hasOnly([
+          'proofId', 'requestId', 'requesterId', 'helperId',
+          'requestTitle', 'category', 'requesterDisplayName', 'helperDisplayName',
+          'verificationToken', 'proofStatus', 'optionalFeedback', 'rating',
+          'completedAt', 'confirmedAt', 'generatedAt'
+        ])
+        && isValidId(data.proofId)
+        && isValidId(data.requestId)
+        && data.requesterId is string && data.requesterId.size() >= 1 && data.requesterId.size() <= 128
+        && data.helperId is string && data.helperId.size() >= 1 && data.helperId.size() <= 128
+        && data.requestTitle is string && data.requestTitle.size() >= 1 && data.requestTitle.size() <= 140
+        && isValidCategory(data.category)
+        && data.requesterDisplayName is string && data.requesterDisplayName.size() >= 1 && data.requesterDisplayName.size() <= 80
+        && data.helperDisplayName is string && data.helperDisplayName.size() >= 1 && data.helperDisplayName.size() <= 80
+        && data.verificationToken is string && data.verificationToken.size() >= 12 && data.verificationToken.size() <= 128
+        && data.proofStatus in ['VALID', 'SUSPENDED']
+        && (!('optionalFeedback' in data) || data.optionalFeedback == null || (data.optionalFeedback is string && data.optionalFeedback.size() <= 600))
+        && (!('rating' in data) || data.rating == null || (data.rating is number && data.rating >= 1 && data.rating <= 5))
+        && (!('completedAt' in data) || data.completedAt == null || data.completedAt is timestamp)
+        && (!('confirmedAt' in data) || data.confirmedAt == null || data.confirmedAt is timestamp)
+        && data.generatedAt is timestamp;
+    }
+
+    function isValidHelpIssue(data) {
+      return data.keys().hasAll(['requestId', 'reportedBy', 'requesterId', 'issueDescription', 'issueStatus', 'createdAt'])
+        && data.keys().hasOnly(['requestId', 'reportedBy', 'requesterId', 'helperId', 'issueDescription', 'issueStatus', 'adminNotes', 'createdAt', 'resolvedAt'])
+        && isValidId(data.requestId)
+        && data.reportedBy is string && data.reportedBy.size() >= 1 && data.reportedBy.size() <= 128
+        && data.requesterId is string && data.requesterId.size() >= 1 && data.requesterId.size() <= 128
+        && (!('helperId' in data) || data.helperId == null || (data.helperId is string && data.helperId.size() <= 128))
+        && data.issueDescription is string && data.issueDescription.size() >= 3 && data.issueDescription.size() <= 1000
+        && data.issueStatus in ['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'FLAGGED']
+        && (!('adminNotes' in data) || data.adminNotes == null || (data.adminNotes is string && data.adminNotes.size() <= 1000))
+        && data.createdAt is timestamp
+        && (!('resolvedAt' in data) || data.resolvedAt == null || data.resolvedAt is timestamp);
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'actorId', 'title', 'message', 'notificationType', 'isRead', 'createdAt'])
+        && data.keys().hasOnly([
+          'userId', 'actorId', 'requestId', 'bloodRequestId',
+          'foodDonationId', 'foodAssistanceId', 'foodCertificateId',
+          'proofId', 'title', 'message', 'notificationType', 'actionUrl',
+          'deliveryChannels', 'isRead', 'createdAt'
+        ])
+        && data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128
+        && data.actorId is string && data.actorId.size() >= 1 && data.actorId.size() <= 128
+        && (!('requestId' in data) || data.requestId == null || (data.requestId is string && data.requestId.size() <= 64))
+        && (!('bloodRequestId' in data) || data.bloodRequestId == null || (data.bloodRequestId is string && data.bloodRequestId.size() <= 64))
+        && (!('foodDonationId' in data) || data.foodDonationId == null || (data.foodDonationId is string && data.foodDonationId.size() <= 64))
+        && (!('foodAssistanceId' in data) || data.foodAssistanceId == null || (data.foodAssistanceId is string && data.foodAssistanceId.size() <= 64))
+        && (!('foodCertificateId' in data) || data.foodCertificateId == null || (data.foodCertificateId is string && data.foodCertificateId.size() <= 64))
+        && (!('proofId' in data) || data.proofId == null || (data.proofId is string && data.proofId.size() <= 64))
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 140
+        && data.message is string && data.message.size() >= 1 && data.message.size() <= 500
+        && data.notificationType is string && data.notificationType.size() >= 1 && data.notificationType.size() <= 60
+        && (!('actionUrl' in data) || data.actionUrl == null || (data.actionUrl is string && data.actionUrl.size() <= 140))
+        && (!('deliveryChannels' in data) || (data.deliveryChannels is list && data.deliveryChannels.size() <= 5 && (data.deliveryChannels.size() == 0 || data.deliveryChannels[0] is string)))
+        && data.isRead is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['actorId', 'action', 'entityType', 'entityId', 'previousStatus', 'newStatus', 'createdAt'])
+        && data.keys().hasOnly(['actorId', 'action', 'entityType', 'entityId', 'previousStatus', 'newStatus', 'details', 'createdAt'])
+        && data.actorId is string && data.actorId.size() >= 1 && data.actorId.size() <= 128
+        && data.action is string && data.action.size() >= 1 && data.action.size() <= 80
+        && data.entityType is string && data.entityType.size() >= 1 && data.entityType.size() <= 60
+        && data.entityId is string && data.entityId.size() >= 1 && data.entityId.size() <= 128
+        && data.previousStatus is string && data.previousStatus.size() <= 60
+        && data.newStatus is string && data.newStatus.size() <= 60
+        && (!('details' in data) || data.details == null || (data.details is string && data.details.size() <= 400))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidChatMessage(data) {
+      return data.keys().hasAll(['messageId', 'requestId', 'senderId', 'senderName', 'text', 'createdAt'])
+        && data.keys().hasOnly([
+          'messageId', 'requestId', 'recipientId', 'senderId', 'senderName', 'senderPhotoUrl',
+          'text', 'messageType', 'hospitalName', 'hospitalAddress', 'latitude', 'longitude',
+          'sharedContact', 'readBy', 'createdAt'
+        ])
+        && isValidId(data.messageId)
+        && isValidId(data.requestId)
+        && (!('recipientId' in data) || data.recipientId == null || (data.recipientId is string && data.recipientId.size() <= 128))
+        && data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128
+        && data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80
+        && (!('senderPhotoUrl' in data) || data.senderPhotoUrl == null || (data.senderPhotoUrl is string && data.senderPhotoUrl.size() <= 500))
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
+        && (!('messageType' in data) || data.messageType in ['text', 'hospital_location', 'availability_confirm', 'contact_share'])
+        && (!('hospitalName' in data) || data.hospitalName == null || (data.hospitalName is string && data.hospitalName.size() <= 140))
+        && (!('hospitalAddress' in data) || data.hospitalAddress == null || (data.hospitalAddress is string && data.hospitalAddress.size() <= 240))
+        && (!('latitude' in data) || data.latitude == null || data.latitude is number)
+        && (!('longitude' in data) || data.longitude == null || data.longitude is number)
+        && (!('sharedContact' in data) || data.sharedContact == null || (data.sharedContact is string && data.sharedContact.size() <= 40))
+        && (!('readBy' in data) || (data.readBy is list && data.readBy.size() <= 20 && (data.readBy.size() == 0 || data.readBy[0] is string)))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidHelperAcceptance(data) {
+      return data.keys().hasAll(['acceptanceId', 'requestId', 'helperId', 'helperDisplayName', 'acceptanceStatus', 'acceptedAt', 'matchingRound'])
+        && isValidId(data.acceptanceId)
+        && isValidId(data.requestId)
+        && data.helperId is string && data.helperId.size() >= 1 && data.helperId.size() <= 128
+        && data.helperDisplayName is string && data.helperDisplayName.size() >= 1 && data.helperDisplayName.size() <= 80
+        && data.acceptanceStatus in ['ACCEPTED', 'SELECTED', 'CONFIRMED', 'UNAVAILABLE', 'REJECTED', 'CANCELLED', 'COMPLETED']
+        && (!('helperPhotoUrl' in data) || data.helperPhotoUrl == null || (data.helperPhotoUrl is string && data.helperPhotoUrl.size() <= 500))
+        && (!('helperVerified' in data) || data.helperVerified is bool)
+        && (!('helperBloodGroup' in data) || data.helperBloodGroup == null || (data.helperBloodGroup is string && data.helperBloodGroup.size() <= 10))
+        && (!('rejectionReason' in data) || data.rejectionReason == null || (data.rejectionReason is string && data.rejectionReason.size() <= 500))
+        && (!('approximateDistance' in data) || data.approximateDistance is number)
+        && (!('estimatedArrival' in data) || data.estimatedArrival is number)
+        && (!('isSelected' in data) || data.isSelected is bool)
+        && data.matchingRound is number && data.matchingRound >= 1
+        && data.acceptedAt is timestamp;
+    }
+
+    // 1. Admins collection
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && isSignedIn() && (adminId == request.auth.uid || isAdmin());
+      allow list, write: if false;
+    }
+
+    // 2. Users (PII split collection)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && (userId == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(userId) && userId == request.auth.uid
+        && isValidUserPublic(incoming())
+        && incoming().uid == request.auth.uid
+        && (incoming().verified == false || isEmailVerified())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(userId)
+        && isValidUserPublic(incoming())
+        && (
+          (userId == request.auth.uid
+            && incoming().uid == existing().uid
+            && (incoming().verified == existing().verified || (incoming().verified == true && isEmailVerified()))
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoUrl', 'bloodGroup', 'approximateArea', 'canProvide', 'verified', 'peopleHelped', 'requestsCompleted', 'volunteerHours', 'updatedAt']))
+          || isAdmin()
+        );
+      allow delete: if false;
+
+      match /private/{docId} {
+        allow get: if isValidId(userId) && isValidId(docId) && isSignedIn() && (userId == request.auth.uid || isAdmin());
+        allow list: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+        allow create, update: if isValidId(userId) && docId == 'info' && isSignedIn()
+          && userId == request.auth.uid
+          && isValidUserPrivate(incoming())
+          && incoming().uid == request.auth.uid
+          && incoming().updatedAt == request.time;
+        allow delete: if false;
+      }
+    }
+
+    // 2b. Public-Safe Blood Donor Profiles Registry (No phone/email PII; blocked for Food Homeage)
+    match /donor_profiles/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && !isHomeageUser();
+      allow list: if isSignedIn() && !isHomeageUser() && (
+        resource.data.accountStatus == 'ACTIVE' ||
+        resource.data.uid == request.auth.uid ||
+        isHospitalUser() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && !isHomeageUser() && isValidId(userId)
+        && userId == request.auth.uid
+        && isValidDonorProfile(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().accountStatus == 'ACTIVE'
+        && incoming().totalDonations == 0
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isEmailVerified() && !isHomeageUser() && isValidId(userId)
+        && isValidDonorProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (userId == request.auth.uid
+            && incoming().accountStatus == existing().accountStatus
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'photoUrl', 'bloodGroup', 'isAvailable', 'city',
+              'approximateArea', 'latitude', 'longitude', 'maxDistanceKm',
+              'notifyInApp', 'notifyPush', 'notifyEmail', 'notifySms',
+              'notificationsOptOut', 'lastDonationDate', 'totalDonations', 'updatedAt'
+            ]))
+        );
+      allow delete: if false;
+    }
+
+    // 2c. Blood Requests + Protected Contact Subcollection (STRICT: Food Homeage blocked; Hospital Portal authorized)
+    match /blood_requests/{bloodRequestId} {
+      allow get: if isValidId(bloodRequestId) && isSignedIn() && !isHomeageUser();
+      allow list: if isSignedIn() && !isHomeageUser() && (
+        resource.data.status != 'REQUEST_CANCELLED' ||
+        resource.data.requesterId == request.auth.uid ||
+        isHospitalUser() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && !isHomeageUser() && isValidId(bloodRequestId)
+        && isValidBloodRequest(incoming())
+        && incoming().bloodRequestId == bloodRequestId
+        && incoming().requesterId == request.auth.uid
+        && incoming().fulfilledUnits == 0
+        && incoming().confirmedUnits == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isEmailVerified() && !isHomeageUser() && isValidId(bloodRequestId)
+        && isValidBloodRequest(incoming())
+        && incoming().bloodRequestId == existing().bloodRequestId
+        && incoming().requesterId == existing().requesterId
+        && incoming().createdAt == existing().createdAt
+        && (
+          isAdmin()
+          || (isHospitalUser()
+            && incoming().updatedAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'selectedDonorIds', 'assignedHospitalId', 'assignedHospitalName',
+              'hospitalVerified', 'hospitalStatus', 'hospitalNotes',
+              'fulfilledUnits', 'confirmedUnits', 'fulfilledAt', 'cancellationReason', 'updatedAt'
+            ]))
+          || (
+            !(existing().status in ['REQUEST_FULFILLED', 'REQUEST_CANCELLED']) && (
+              // Action 1: Requester manages matches, selected donors, scheduling, completion, fulfillment, or cancellation
+              (existing().requesterId == request.auth.uid
+                && incoming().updatedAt == request.time
+                && incoming().diff(existing()).affectedKeys().hasOnly([
+                  'status', 'matchedDonorsCount', 'notificationsSentCount',
+                  'interestedDonorsCount', 'selectedDonorIds', 'fulfilledUnits',
+                  'confirmedUnits', 'fulfilledAt', 'cancellationReason', 'updatedAt'
+                ]))
+              // Action 2: Matched donor updates interested count/status when accepting
+              || (existing().requesterId != request.auth.uid
+                && incoming().updatedAt == request.time
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'interestedDonorsCount', 'updatedAt'])
+                && (exists(/databases/$(database)/documents/blood_donor_matches/$(bloodRequestId + '_' + request.auth.uid))
+                  || existsAfter(/databases/$(database)/documents/blood_donor_matches/$(bloodRequestId + '_' + request.auth.uid))))
+            )
+          )
+        );
+      allow delete: if false;
+
+      match /private/{docId} {
+        allow get: if isValidId(bloodRequestId) && isValidId(docId) && isSignedIn() && !isHomeageUser() && (
+          existing().requesterId == request.auth.uid ||
+          (existing().authorizedDonorIds is list && request.auth.uid in existing().authorizedDonorIds) ||
+          isHospitalUser() ||
+          isAdmin()
+        );
+        allow list: if isSignedIn() && !isHomeageUser() && (
+          resource.data.requesterId == request.auth.uid || isHospitalUser() || isAdmin()
+        );
+        allow create: if isValidId(bloodRequestId) && docId == 'contact' && isSignedIn() && isEmailVerified() && !isHomeageUser()
+          && isValidBloodRequestContact(incoming())
+          && incoming().bloodRequestId == bloodRequestId
+          && incoming().requesterId == request.auth.uid
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(bloodRequestId) && docId == 'contact' && isSignedIn() && isEmailVerified() && !isHomeageUser()
+          && isValidBloodRequestContact(incoming())
+          && (existing().requesterId == request.auth.uid || isHospitalUser())
+          && incoming().bloodRequestId == existing().bloodRequestId
+          && incoming().requesterId == existing().requesterId
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['authorizedDonorIds', 'updatedAt']);
+        allow delete: if false;
+      }
+    }
+
+    // 2d. Blood Donor Matches (Deterministic ${bloodRequestId}_${donorId}; blocked for Food Homeage)
+    match /blood_donor_matches/{matchId} {
+      allow get: if isValidId(matchId) && isSignedIn() && !isHomeageUser() && (
+        existing().donorId == request.auth.uid ||
+        existing().requesterId == request.auth.uid ||
+        isHospitalUser() ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && !isHomeageUser() && (
+        resource.data.donorId == request.auth.uid ||
+        resource.data.requesterId == request.auth.uid ||
+        isHospitalUser() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && !isHomeageUser() && isValidId(matchId)
+        && isValidBloodDonorMatch(incoming())
+        && incoming().matchId == matchId
+        && incoming().notifiedAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/blood_requests/$(incoming().bloodRequestId))
+        && (
+          (incoming().requesterId == request.auth.uid
+            && incoming().responseStatus == 'NOTIFIED'
+            && get(/databases/$(database)/documents/blood_requests/$(incoming().bloodRequestId)).data.requesterId == request.auth.uid)
+          || (incoming().donorId == request.auth.uid
+            && matchId == incoming().bloodRequestId + '_' + request.auth.uid
+            && incoming().responseStatus == 'INTERESTED'
+            && incoming().fulfilledUnitsCount == 0
+            && incoming().requesterId == get(/databases/$(database)/documents/blood_requests/$(incoming().bloodRequestId)).data.requesterId
+            && !(get(/databases/$(database)/documents/blood_requests/$(incoming().bloodRequestId)).data.status in ['REQUEST_FULFILLED', 'REQUEST_CANCELLED']))
+        );
+      allow update: if isSignedIn() && isEmailVerified() && !isHomeageUser() && isValidId(matchId)
+        && isValidBloodDonorMatch(incoming())
+        && incoming().matchId == existing().matchId
+        && incoming().bloodRequestId == existing().bloodRequestId
+        && incoming().requesterId == existing().requesterId
+        && incoming().donorId == existing().donorId
+        && incoming().notifiedAt == existing().notifiedAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || isHospitalUser()
+          || (existing().donorId == request.auth.uid
+            && !(existing().responseStatus in ['COMPLETED', 'CLOSED_FULFILLED', 'CANCELLED'])
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'responseStatus', 'rejectionReason', 'contactSharedByDonor',
+              'donorConfirmedAvailable', 'donorPhone', 'donorEmail', 'donorArea', 'donorNotes',
+              'respondedAt', 'updatedAt'
+            ]))
+          || (existing().requesterId == request.auth.uid
+            && !(existing().responseStatus in ['COMPLETED', 'CLOSED_FULFILLED', 'CANCELLED'])
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'responseStatus', 'scheduledDateTime', 'contactSharedByRequester',
+              'fulfilledUnitsCount', 'selectedAt', 'completedAt', 'updatedAt'
+            ]))
+        );
+      allow delete: if false;
+    }
+
+    // 2e. Donation History (Immutable completed donation ledger; blocked for Food Homeage)
+    match /donation_history/{historyId} {
+      allow get: if isValidId(historyId) && isSignedIn() && !isHomeageUser() && (
+        existing().donorId == request.auth.uid ||
+        existing().requesterId == request.auth.uid ||
+        isHospitalUser() ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && !isHomeageUser() && (
+        resource.data.donorId == request.auth.uid ||
+        resource.data.requesterId == request.auth.uid ||
+        isHospitalUser() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && !isHomeageUser() && isValidId(historyId)
+        && isValidDonationHistory(incoming())
+        && incoming().historyId == historyId
+        && (incoming().requesterId == request.auth.uid || isHospitalUser() || isAdmin())
+        && incoming().donatedAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // 3. Help Requests
+    match /help_requests/{requestId} {
+      allow get, list: if isSignedIn();
+
+      allow create: if isSignedIn() && isEmailVerified() && isValidId(requestId)
+        && isValidHelpRequest(incoming())
+        && incoming().requestId == requestId
+        && incoming().requesterId == request.auth.uid
+        && (incoming().status == 'REQUESTED' || incoming().status == 'OPEN')
+        && (!('helperId' in incoming()) || incoming().helperId == null)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isSignedIn() && isEmailVerified() && isValidId(requestId)
+        && isValidHelpRequest(incoming())
+        && incoming().requestId == existing().requestId
+        && incoming().requesterId == existing().requesterId
+        && incoming().createdAt == existing().createdAt
+        && (
+          isAdmin()
+          || (
+            !(existing().status in ['COMPLETED_CONFIRMED', 'CANCELLED']) && (
+              // Action 1: Helper accepts an open request (cannot accept own request)
+              (existing().status in ['REQUESTED', 'OPEN', 'WAITING_FOR_HELPERS', 'ONE_HELPER_ACCEPTED', 'TWO_HELPERS_ACCEPTED', 'REOPENED']
+                && existing().requesterId != request.auth.uid
+                && incoming().updatedAt == request.time)
+              // Action 1b: Multi-helper acceptance, selection, confirmation, or backup update
+              || (incoming().updatedAt == request.time
+                && (existing().requesterId == request.auth.uid || existing().helperId == request.auth.uid || incoming().helperId == request.auth.uid || incoming().selectedHelperId == request.auth.uid)
+                && incoming().diff(existing()).affectedKeys().hasOnly([
+                  'status', 'helperId', 'helperDisplayName', 'helperVerified', 'acceptedAt',
+                  'acceptedCount', 'remainingSlots', 'matchingRound', 'selectedHelperId',
+                  'acceptanceClosed', 'reopenedAt', 'updatedAt', 'journeyStartedAt', 'arrivedAt',
+                  'assistanceStartedAt', 'completedAt', 'confirmedAt', 'cancellationReason'
+                ]))
+              // Action 2: Assigned helper moves ACCEPTED -> IN_PROGRESS
+              || (existing().status in ['ACCEPTED', 'HELPER_SELECTED', 'CONFIRMED']
+                && (existing().helperId == request.auth.uid || incoming().helperId == request.auth.uid)
+                && incoming().status in ['IN_PROGRESS', 'ON_THE_WAY']
+                && incoming().updatedAt == request.time)
+              // Action 2a: Assigned helper starts journey
+              || ((existing().helperId == request.auth.uid || incoming().helperId == request.auth.uid)
+                && incoming().journeyStartedAt == request.time
+                && incoming().updatedAt == request.time)
+              // Action 2b: Assigned helper marks arrived
+              || ((existing().helperId == request.auth.uid || incoming().helperId == request.auth.uid)
+                && incoming().arrivedAt == request.time
+                && incoming().updatedAt == request.time)
+              // Action 2c: Assigned helper starts assistance
+              || ((existing().helperId == request.auth.uid || incoming().helperId == request.auth.uid)
+                && incoming().assistanceStartedAt == request.time
+                && incoming().updatedAt == request.time)
+              // Action 3: Assigned helper marks completed -> AWAITING_CONFIRMATION
+              || ((existing().helperId == request.auth.uid || incoming().helperId == request.auth.uid)
+                && incoming().status == 'AWAITING_CONFIRMATION'
+                && incoming().completedAt == request.time
+                && incoming().updatedAt == request.time)
+              // Action 4: Requester confirms help received -> COMPLETED_CONFIRMED
+              || (existing().requesterId == request.auth.uid
+                && incoming().status in ['COMPLETED_CONFIRMED', 'COMPLETED']
+                && incoming().confirmedAt == request.time
+                && incoming().updatedAt == request.time)
+              // Action 5: Requester says not yet received -> COMPLETED_UNCONFIRMED
+              || (existing().status == 'AWAITING_CONFIRMATION'
+                && existing().requesterId == request.auth.uid
+                && incoming().status == 'COMPLETED_UNCONFIRMED'
+                && incoming().updatedAt == request.time)
+              // Action 6: Requester reports an issue -> ISSUE_REPORTED / UNDER_REVIEW
+              || (existing().requesterId == request.auth.uid
+                && incoming().status in ['ISSUE_REPORTED', 'UNDER_REVIEW']
+                && incoming().updatedAt == request.time)
+              // Action 7: Requester cancels open request
+              || (existing().requesterId == request.auth.uid
+                && incoming().status == 'CANCELLED'
+                && incoming().updatedAt == request.time)
+              // Action 7b: Requester or Helper cancels with reason
+              || ((existing().requesterId == request.auth.uid || existing().helperId == request.auth.uid)
+                && !(existing().status in ['COMPLETED_CONFIRMED', 'CANCELLED'])
+                && incoming().status == 'CANCELLED'
+                && incoming().cancellationReason is string && incoming().cancellationReason.size() >= 1 && incoming().cancellationReason.size() <= 500
+                && incoming().updatedAt == request.time)
+              // Action 8: Financial donation increment on open Money request
+              || (existing().status in ['REQUESTED', 'OPEN']
+                && existing().category == 'Money'
+                && incoming().amountCollected is number
+                && incoming().amountCollected > (existing().amountCollected == null ? 0 : existing().amountCollected)
+                && incoming().updatedAt == request.time)
+            )
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // 3b. Helper Acceptances (up to 3 per matching round)
+    match /helper_acceptances/{acceptanceId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(acceptanceId)
+        && isValidHelperAcceptance(incoming())
+        && (incoming().helperId == request.auth.uid || isAdmin())
+        && incoming().acceptedAt == request.time;
+      allow update: if isSignedIn() && isValidId(acceptanceId)
+        && isValidHelperAcceptance(incoming())
+        && incoming().acceptanceId == existing().acceptanceId
+        && incoming().requestId == existing().requestId
+        && incoming().helperId == existing().helperId
+        && (
+          isAdmin()
+          || existing().helperId == request.auth.uid
+          || (exists(/databases/$(database)/documents/help_requests/$(existing().requestId))
+              && get(/databases/$(database)/documents/help_requests/$(existing().requestId)).data.requesterId == request.auth.uid)
+        );
+      allow delete: if false;
+    }
+
+    // 4. Help Completion Submissions
+    match /help_completion_submissions/{submissionId} {
+      allow get: if isValidId(submissionId) && isSignedIn() && (
+        existing().helperId == request.auth.uid ||
+        existing().requesterId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.helperId == request.auth.uid ||
+        resource.data.requesterId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && isValidId(submissionId)
+        && isValidCompletionSubmission(incoming())
+        && incoming().helperId == request.auth.uid
+        && incoming().submittedAt == request.time
+        && exists(/databases/$(database)/documents/help_requests/$(incoming().requestId))
+        && get(/databases/$(database)/documents/help_requests/$(incoming().requestId)).data.helperId == request.auth.uid
+        && get(/databases/$(database)/documents/help_requests/$(incoming().requestId)).data.requesterId == incoming().requesterId;
+      allow update, delete: if false;
+    }
+
+    // 5. Help Confirmations (keyed by requestId to block duplicate confirmations)
+    match /help_confirmations/{requestId} {
+      allow get: if isValidId(requestId) && isSignedIn() && (
+        existing().requesterId == request.auth.uid ||
+        existing().helperId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.requesterId == request.auth.uid ||
+        resource.data.helperId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && isValidId(requestId)
+        && isValidHelpConfirmation(incoming())
+        && incoming().requestId == requestId
+        && incoming().requesterId == request.auth.uid
+        && incoming().helperId != request.auth.uid
+        && incoming().confirmedAt == request.time
+        && exists(/databases/$(database)/documents/help_requests/$(requestId))
+        && get(/databases/$(database)/documents/help_requests/$(requestId)).data.requesterId == request.auth.uid
+        && get(/databases/$(database)/documents/help_requests/$(requestId)).data.helperId == incoming().helperId
+        && get(/databases/$(database)/documents/help_requests/$(requestId)).data.status == 'AWAITING_CONFIRMATION';
+
+      allow update: if isSignedIn() && isEmailVerified() && isValidId(requestId)
+        && isValidHelpConfirmation(incoming())
+        && existing().confirmationStatus == 'NOT_YET_RECEIVED'
+        && existing().requesterId == request.auth.uid
+        && incoming().requestId == existing().requestId
+        && incoming().requesterId == existing().requesterId
+        && incoming().helperId == existing().helperId
+        && incoming().confirmedAt == request.time
+        && get(/databases/$(database)/documents/help_requests/$(requestId)).data.status == 'AWAITING_CONFIRMATION';
+
+      allow delete: if false;
+    }
+
+    // 6. Digital Proofs (QR verifiable via exact proofId, list restricted to involved parties/admin)
+    match /digital_proofs/{proofId} {
+      allow get: if isValidId(proofId);
+      allow list: if isSignedIn() && (
+        resource.data.requesterId == request.auth.uid ||
+        resource.data.helperId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && isValidId(proofId)
+        && isValidDigitalProof(incoming())
+        && incoming().proofId == proofId
+        && incoming().requesterId == request.auth.uid
+        && incoming().helperId != request.auth.uid
+        && incoming().proofStatus == 'VALID'
+        && incoming().generatedAt == request.time
+        && exists(/databases/$(database)/documents/help_requests/$(incoming().requestId))
+        && get(/databases/$(database)/documents/help_requests/$(incoming().requestId)).data.requesterId == request.auth.uid
+        && get(/databases/$(database)/documents/help_requests/$(incoming().requestId)).data.helperId == incoming().helperId
+        && getAfter(/databases/$(database)/documents/help_requests/$(incoming().requestId)).data.status == 'COMPLETED_CONFIRMED';
+
+      allow update: if isAdmin() && isValidId(proofId)
+        && isValidDigitalProof(incoming())
+        && incoming().proofId == existing().proofId
+        && incoming().requestId == existing().requestId
+        && incoming().requesterId == existing().requesterId
+        && incoming().helperId == existing().helperId
+        && incoming().verificationToken == existing().verificationToken
+        && incoming().generatedAt == existing().generatedAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['proofStatus']);
+
+      allow delete: if false;
+    }
+
+    // 7. Help Issues
+    match /help_issues/{issueId} {
+      allow get: if isValidId(issueId) && isSignedIn() && (
+        existing().reportedBy == request.auth.uid ||
+        existing().requesterId == request.auth.uid ||
+        existing().helperId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.reportedBy == request.auth.uid ||
+        resource.data.requesterId == request.auth.uid ||
+        resource.data.helperId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && isValidId(issueId)
+        && isValidHelpIssue(incoming())
+        && incoming().reportedBy == request.auth.uid
+        && incoming().issueStatus in ['OPEN', 'UNDER_REVIEW']
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/help_requests/$(incoming().requestId))
+        && (
+          get(/databases/$(database)/documents/help_requests/$(incoming().requestId)).data.requesterId == request.auth.uid ||
+          get(/databases/$(database)/documents/help_requests/$(incoming().requestId)).data.helperId == request.auth.uid
+        );
+      allow update: if isAdmin() && isValidId(issueId)
+        && isValidHelpIssue(incoming())
+        && incoming().requestId == existing().requestId
+        && incoming().reportedBy == existing().reportedBy
+        && incoming().requesterId == existing().requesterId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['issueStatus', 'adminNotes', 'resolvedAt']);
+      allow delete: if false;
+    }
+
+    // 8. Notifications
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && isSignedIn() && (
+        existing().userId == request.auth.uid || isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && isValidId(notificationId)
+        && isValidNotification(incoming())
+        && incoming().actorId == request.auth.uid
+        && incoming().isRead == false
+        && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isValidId(notificationId)
+        && isValidNotification(incoming())
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().actorId == existing().actorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+      allow delete: if false;
+    }
+
+    // 9. Immutable Audit Logs
+    match /audit_logs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isSignedIn() && isEmailVerified() && isValidId(logId)
+        && isValidAuditLog(incoming())
+        && incoming().actorId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // 10. Chat Messages
+    match /chat_messages/{messageId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isEmailVerified() && isValidId(messageId)
+        && isValidChatMessage(incoming())
+        && incoming().messageId == messageId
+        && incoming().senderId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isValidId(messageId)
+        && isValidChatMessage(incoming())
+        && incoming().messageId == existing().messageId
+        && incoming().requestId == existing().requestId
+        && incoming().senderId == existing().senderId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['readBy']);
+      allow delete: if false;
+    }
+
+    // 11. Hashed Account Identifier Registry (Duplicate Prevention without PII)
+    match /account_identifiers/{hashId} {
+      allow get: if isValidId(hashId);
+      allow list: if false;
+      allow create: if isSignedIn() && isValidId(hashId)
+        && incoming().keys().hasAll(['identifierType', 'uid', 'createdAt'])
+        && incoming().keys().hasOnly(['identifierType', 'uid', 'createdAt'])
+        && incoming().identifierType in ['email', 'mobile']
+        && incoming().uid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // ==================================================
+    // 12. SMART FOOD DONATION & FOOD RESCUE PORTAL RULES
+    // ==================================================
+
+    function isValidFoodCategory(cat) {
+      return cat in [
+        'Cooked Food',
+        'Rice and Meals',
+        'Vegetables',
+        'Fruits',
+        'Bread and Bakery',
+        'Packed Food',
+        'Groceries',
+        'Other Food Items'
+      ];
+    }
+
+    function isValidFoodDonorType(dt) {
+      return dt in [
+        'Individual',
+        'Restaurant',
+        'Hotel',
+        'Bakery',
+        'Supermarket',
+        'Marriage Hall',
+        'Event Organizer',
+        'Food Shop'
+      ];
+    }
+
+    function isValidFoodDonationStatus(st) {
+      return st in [
+        'Available',
+        'Request Received',
+        'Accepted',
+        'Reserved',
+        'Ready for Pickup',
+        'Collected',
+        'Completed',
+        'Expired',
+        'Cancelled'
+      ];
+    }
+
+    function isValidFoodDonation(data) {
+      return data.keys().hasAll([
+          'donationId', 'donorId', 'donorName', 'donorType', 'foodName', 'category',
+          'totalQuantity', 'availableQuantity', 'quantityUnit', 'servingsCount',
+          'preparedAt', 'collectionDeadline', 'description', 'pickupArea', 'city',
+          'location', 'safetyConfirmed', 'verified', 'status', 'activeRequestsCount',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'donationId', 'donorId', 'donorName', 'donorType', 'foodName', 'category',
+          'totalQuantity', 'availableQuantity', 'quantityUnit', 'servingsCount',
+          'preparedAt', 'collectionDeadline', 'description', 'imageUrl', 'pickupArea',
+          'city', 'location', 'latitude', 'longitude', 'pickupInstructions',
+          'safetyConfirmed', 'allowPartialAcceptance', 'assignedHomeageId', 'assignedHomeageName',
+          'verified', 'isFlagged', 'status', 'activeRequestsCount',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.donationId)
+        && isValidId(data.donorId)
+        && data.donorName is string && data.donorName.size() >= 1 && data.donorName.size() <= 80
+        && isValidFoodDonorType(data.donorType)
+        && data.foodName is string && data.foodName.size() >= 2 && data.foodName.size() <= 120
+        && isValidFoodCategory(data.category)
+        && data.totalQuantity is number && data.totalQuantity >= 1 && data.totalQuantity <= 100000
+        && data.availableQuantity is number && data.availableQuantity >= 0 && data.availableQuantity <= data.totalQuantity
+        && data.quantityUnit is string && data.quantityUnit.size() >= 1 && data.quantityUnit.size() <= 40
+        && data.servingsCount is number && data.servingsCount >= 1 && data.servingsCount <= 100000
+        && data.preparedAt is string && data.preparedAt.size() >= 4 && data.preparedAt.size() <= 60
+        && data.collectionDeadline is string && data.collectionDeadline.size() >= 4 && data.collectionDeadline.size() <= 60
+        && data.description is string && data.description.size() >= 2 && data.description.size() <= 1000
+        && (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 450000))
+        && data.pickupArea is string && data.pickupArea.size() >= 1 && data.pickupArea.size() <= 140
+        && data.city is string && data.city.size() >= 2 && data.city.size() <= 80
+        && data.location is string && data.location.size() >= 2 && data.location.size() <= 140
+        && (!('latitude' in data) || data.latitude is number)
+        && (!('longitude' in data) || data.longitude is number)
+        && (!('pickupInstructions' in data) || data.pickupInstructions == null || (data.pickupInstructions is string && data.pickupInstructions.size() <= 500))
+        && data.safetyConfirmed == true
+        && (!('allowPartialAcceptance' in data) || data.allowPartialAcceptance is bool)
+        && (!('assignedHomeageId' in data) || data.assignedHomeageId == null || (data.assignedHomeageId is string && data.assignedHomeageId.size() <= 128))
+        && (!('assignedHomeageName' in data) || data.assignedHomeageName == null || (data.assignedHomeageName is string && data.assignedHomeageName.size() <= 140))
+        && data.verified is bool
+        && (!('isFlagged' in data) || data.isFlagged is bool)
+        && isValidFoodDonationStatus(data.status)
+        && data.activeRequestsCount is number && data.activeRequestsCount >= 0 && data.activeRequestsCount <= 5000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFoodDonationPrivateContact(data) {
+      return data.keys().hasAll(['donationId', 'donorId', 'mobileNumber', 'pickupAddress', 'authorizedReceiverIds', 'updatedAt'])
+        && data.keys().hasOnly(['donationId', 'donorId', 'mobileNumber', 'contactDetails', 'pickupAddress', 'authorizedReceiverIds', 'updatedAt'])
+        && isValidId(data.donationId)
+        && isValidId(data.donorId)
+        && data.mobileNumber is string && data.mobileNumber.size() >= 4 && data.mobileNumber.size() <= 30
+        && (!('contactDetails' in data) || data.contactDetails == null || (data.contactDetails is string && data.contactDetails.size() <= 240))
+        && data.pickupAddress is string && data.pickupAddress.size() >= 3 && data.pickupAddress.size() <= 240
+        && data.authorizedReceiverIds is list && data.authorizedReceiverIds.size() <= 100 && (data.authorizedReceiverIds.size() == 0 || data.authorizedReceiverIds[0] is string)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFoodCollectionRequest(data) {
+      return data.keys().hasAll([
+          'requestId', 'donationId', 'donorId', 'donorName', 'foodName', 'foodCategory',
+          'receiverId', 'receiverName', 'receiverMobile', 'requestedQuantity', 'quantityUnit',
+          'peopleCount', 'preferredCollectionTime', 'pickupLocation', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'requestId', 'donationId', 'donorId', 'donorName', 'foodName', 'foodCategory',
+          'receiverId', 'receiverName', 'receiverMobile', 'homeageId', 'requestedQuantity', 'quantityUnit',
+          'peopleCount', 'reason', 'preferredCollectionTime', 'pickupLocation',
+          'additionalInfo', 'status', 'rejectionReason', 'certificateId',
+          'createdAt', 'acceptedAt', 'readyAt', 'collectedAt', 'updatedAt'
+        ])
+        && isValidId(data.requestId)
+        && isValidId(data.donationId)
+        && isValidId(data.donorId)
+        && data.donorName is string && data.donorName.size() >= 1 && data.donorName.size() <= 80
+        && data.foodName is string && data.foodName.size() >= 1 && data.foodName.size() <= 120
+        && isValidFoodCategory(data.foodCategory)
+        && isValidId(data.receiverId)
+        && data.receiverName is string && data.receiverName.size() >= 1 && data.receiverName.size() <= 80
+        && data.receiverMobile is string && data.receiverMobile.size() >= 4 && data.receiverMobile.size() <= 30
+        && (!('homeageId' in data) || data.homeageId == null || (data.homeageId is string && data.homeageId.size() <= 128))
+        && data.requestedQuantity is number && data.requestedQuantity >= 1 && data.requestedQuantity <= 100000
+        && data.quantityUnit is string && data.quantityUnit.size() >= 1 && data.quantityUnit.size() <= 40
+        && data.peopleCount is number && data.peopleCount >= 1 && data.peopleCount <= 100000
+        && (!('reason' in data) || data.reason == null || (data.reason is string && data.reason.size() <= 400))
+        && data.preferredCollectionTime is string && data.preferredCollectionTime.size() >= 2 && data.preferredCollectionTime.size() <= 60
+        && data.pickupLocation is string && data.pickupLocation.size() >= 2 && data.pickupLocation.size() <= 140
+        && (!('additionalInfo' in data) || data.additionalInfo == null || (data.additionalInfo is string && data.additionalInfo.size() <= 400))
+        && data.status in ['Pending', 'Accepted', 'Rejected', 'Ready for Pickup', 'Collected', 'Completed', 'Cancelled']
+        && (!('rejectionReason' in data) || data.rejectionReason == null || (data.rejectionReason is string && data.rejectionReason.size() <= 400))
+        && (!('certificateId' in data) || data.certificateId == null || (data.certificateId is string && data.certificateId.size() <= 64))
+        && data.createdAt is timestamp
+        && (!('acceptedAt' in data) || data.acceptedAt == null || data.acceptedAt is timestamp)
+        && (!('readyAt' in data) || data.readyAt == null || data.readyAt is timestamp)
+        && (!('collectedAt' in data) || data.collectedAt == null || data.collectedAt is timestamp)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFoodAssistanceRequest(data) {
+      return data.keys().hasAll([
+          'assistanceId', 'requesterId', 'requesterDisplayName', 'familyMembersCount',
+          'peopleRequiringFood', 'foodRequirement', 'requiredQuantity', 'fulfilledQuantity',
+          'requiredUnit', 'amountTarget', 'amountRaised', 'foodCategory', 'city',
+          'location', 'requiredDate', 'urgencyLevel', 'verified', 'status',
+          'contributionsCount', 'volunteersCount', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'assistanceId', 'requesterId', 'requesterDisplayName', 'familyMembersCount',
+          'peopleRequiringFood', 'foodRequirement', 'requiredQuantity', 'fulfilledQuantity',
+          'requiredUnit', 'amountTarget', 'amountRaised', 'foodCategory', 'city',
+          'location', 'latitude', 'longitude', 'requiredDate', 'reason',
+          'additionalDetails', 'urgencyLevel', 'verified', 'status',
+          'homeageStatus', 'assignedHomeageId', 'assignedHomeageName', 'assignedVolunteerName', 'distributionScheduledAt',
+          'contributionsCount', 'volunteersCount', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.assistanceId)
+        && isValidId(data.requesterId)
+        && data.requesterDisplayName is string && data.requesterDisplayName.size() >= 1 && data.requesterDisplayName.size() <= 80
+        && data.familyMembersCount is number && data.familyMembersCount >= 1 && data.familyMembersCount <= 10000
+        && data.peopleRequiringFood is number && data.peopleRequiringFood >= 1 && data.peopleRequiringFood <= 50000
+        && data.foodRequirement is string && data.foodRequirement.size() >= 2 && data.foodRequirement.size() <= 160
+        && data.requiredQuantity is number && data.requiredQuantity >= 1 && data.requiredQuantity <= 100000
+        && data.fulfilledQuantity is number && data.fulfilledQuantity >= 0 && data.fulfilledQuantity <= 100000
+        && data.requiredUnit is string && data.requiredUnit.size() >= 1 && data.requiredUnit.size() <= 40
+        && data.amountTarget is number && data.amountTarget >= 0 && data.amountTarget <= 10000000
+        && data.amountRaised is number && data.amountRaised >= 0 && data.amountRaised <= 10000000
+        && isValidFoodCategory(data.foodCategory)
+        && data.city is string && data.city.size() >= 2 && data.city.size() <= 80
+        && data.location is string && data.location.size() >= 2 && data.location.size() <= 140
+        && (!('latitude' in data) || data.latitude is number)
+        && (!('longitude' in data) || data.longitude is number)
+        && data.requiredDate is string && data.requiredDate.size() >= 4 && data.requiredDate.size() <= 60
+        && (!('reason' in data) || data.reason == null || (data.reason is string && data.reason.size() <= 400))
+        && (!('additionalDetails' in data) || data.additionalDetails == null || (data.additionalDetails is string && data.additionalDetails.size() <= 600))
+        && data.urgencyLevel in ['Normal', 'Urgent', 'Critical']
+        && data.verified is bool
+        && data.status in ['Submitted', 'Searching for Donors', 'Contributions Received', 'Partially Fulfilled', 'Fully Fulfilled', 'Completed']
+        && (!('homeageStatus' in data) || data.homeageStatus == null || isValidHomeageFoodRequestStatus(data.homeageStatus))
+        && (!('assignedHomeageId' in data) || data.assignedHomeageId == null || (data.assignedHomeageId is string && data.assignedHomeageId.size() <= 128))
+        && (!('assignedHomeageName' in data) || data.assignedHomeageName == null || (data.assignedHomeageName is string && data.assignedHomeageName.size() <= 140))
+        && (!('assignedVolunteerName' in data) || data.assignedVolunteerName == null || (data.assignedVolunteerName is string && data.assignedVolunteerName.size() <= 100))
+        && (!('distributionScheduledAt' in data) || data.distributionScheduledAt == null || (data.distributionScheduledAt is string && data.distributionScheduledAt.size() <= 80))
+        && data.contributionsCount is number && data.contributionsCount >= 0 && data.contributionsCount <= 5000
+        && data.volunteersCount is number && data.volunteersCount >= 0 && data.volunteersCount <= 5000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFoodAssistancePrivateContact(data) {
+      return data.keys().hasAll(['assistanceId', 'requesterId', 'fullName', 'mobileNumber', 'authorizedContributorIds', 'updatedAt'])
+        && data.keys().hasOnly(['assistanceId', 'requesterId', 'fullName', 'mobileNumber', 'authorizedContributorIds', 'updatedAt'])
+        && isValidId(data.assistanceId)
+        && isValidId(data.requesterId)
+        && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 100
+        && data.mobileNumber is string && data.mobileNumber.size() >= 4 && data.mobileNumber.size() <= 30
+        && data.authorizedContributorIds is list && data.authorizedContributorIds.size() <= 100 && (data.authorizedContributorIds.size() == 0 || data.authorizedContributorIds[0] is string)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFoodContribution(data) {
+      return data.keys().hasAll([
+          'contributionId', 'assistanceId', 'requesterId', 'donorId', 'donorName',
+          'foodCategory', 'foodQuantity', 'quantityUnit', 'servings', 'deliveryMode',
+          'contactDetails', 'status', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'contributionId', 'assistanceId', 'requesterId', 'donorId', 'donorName',
+          'foodCategory', 'foodQuantity', 'quantityUnit', 'servings', 'deliveryMode',
+          'contactDetails', 'status', 'createdAt'
+        ])
+        && isValidId(data.contributionId)
+        && isValidId(data.assistanceId)
+        && isValidId(data.requesterId)
+        && isValidId(data.donorId)
+        && data.donorName is string && data.donorName.size() >= 1 && data.donorName.size() <= 80
+        && isValidFoodCategory(data.foodCategory)
+        && data.foodQuantity is number && data.foodQuantity >= 1 && data.foodQuantity <= 100000
+        && data.quantityUnit is string && data.quantityUnit.size() >= 1 && data.quantityUnit.size() <= 40
+        && data.servings is number && data.servings >= 1 && data.servings <= 100000
+        && data.deliveryMode in ['Pickup', 'Delivery']
+        && data.contactDetails is string && data.contactDetails.size() >= 3 && data.contactDetails.size() <= 200
+        && data.status in ['Offered', 'Accepted', 'Delivered', 'Completed']
+        && data.createdAt is timestamp;
+    }
+
+    function isValidMoneyDonation(data) {
+      return data.keys().hasAll([
+          'donationTxId', 'orderId', 'razorpayPaymentId', 'donorId', 'donorName',
+          'isAnonymous', 'assistanceId', 'assistanceTitle', 'amount', 'currency',
+          'paymentMethod', 'status', 'providerMode', 'receiptNumber', 'createdAt', 'verifiedAt'
+        ])
+        && data.keys().hasOnly([
+          'donationTxId', 'orderId', 'razorpayPaymentId', 'donorId', 'donorName',
+          'isAnonymous', 'targetType', 'homeageId', 'assistanceId', 'assistanceTitle', 'amount', 'currency',
+          'paymentMethod', 'status', 'providerMode', 'receiptNumber', 'createdAt', 'verifiedAt'
+        ])
+        && isValidId(data.donationTxId)
+        && data.orderId is string && data.orderId.size() >= 4 && data.orderId.size() <= 100
+        && data.razorpayPaymentId is string && data.razorpayPaymentId.size() >= 4 && data.razorpayPaymentId.size() <= 100
+        && isValidId(data.donorId)
+        && data.donorName is string && data.donorName.size() >= 1 && data.donorName.size() <= 80
+        && data.isAnonymous is bool
+        && (!('targetType' in data) || data.targetType in ['ASSISTANCE_REQUEST', 'HOMEAGE', 'GENERAL_FUND'])
+        && (!('homeageId' in data) || data.homeageId == null || (data.homeageId is string && data.homeageId.size() <= 128))
+        && data.assistanceId is string && data.assistanceId.size() >= 1 && data.assistanceId.size() <= 64
+        && data.assistanceTitle is string && data.assistanceTitle.size() >= 1 && data.assistanceTitle.size() <= 160
+        && data.amount is number && data.amount >= 1 && data.amount <= 10000000
+        && data.currency == 'INR'
+        && data.paymentMethod in ['UPI', 'Card', 'NetBanking']
+        && data.status == 'VERIFIED'
+        && data.providerMode == 'RAZORPAY_TEST'
+        && data.receiptNumber is string && data.receiptNumber.size() >= 4 && data.receiptNumber.size() <= 64
+        && data.createdAt is timestamp
+        && data.verifiedAt is timestamp;
+    }
+
+    function isValidVolunteerRegistration(data) {
+      return data.keys().hasAll([
+          'volunteerId', 'userId', 'volunteerName', 'mobile', 'city',
+          'role', 'availability', 'status', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'volunteerId', 'userId', 'volunteerName', 'mobile', 'city',
+          'role', 'assistanceId', 'availability', 'status', 'createdAt'
+        ])
+        && isValidId(data.volunteerId)
+        && isValidId(data.userId)
+        && data.volunteerName is string && data.volunteerName.size() >= 1 && data.volunteerName.size() <= 80
+        && data.mobile is string && data.mobile.size() >= 4 && data.mobile.size() <= 30
+        && data.city is string && data.city.size() >= 2 && data.city.size() <= 80
+        && data.role in ['Food Pickup', 'Food Transportation', 'Food Distribution', 'Helping Elderly People', 'Delivering Nearby']
+        && (!('assistanceId' in data) || data.assistanceId == null || (data.assistanceId is string && data.assistanceId.size() <= 64))
+        && data.availability is string && data.availability.size() >= 2 && data.availability.size() <= 120
+        && data.status in ['ACTIVE', 'ASSIGNED', 'COMPLETED', 'SUSPENDED']
+        && data.createdAt is timestamp;
+    }
+
+    function isValidFoodDonationCertificate(data) {
+      return data.keys().hasAll([
+          'certificateId', 'donationId', 'collectionRequestId', 'donorId', 'donorName',
+          'receiverId', 'receiverName', 'foodName', 'foodCategory', 'quantityDelivered',
+          'quantityUnit', 'city', 'verificationToken', 'status', 'completedAt', 'generatedAt'
+        ])
+        && data.keys().hasOnly([
+          'certificateId', 'donationId', 'collectionRequestId', 'donorId', 'donorName',
+          'receiverId', 'receiverName', 'foodName', 'foodCategory', 'quantityDelivered',
+          'quantityUnit', 'city', 'verificationToken', 'status', 'completedAt', 'generatedAt'
+        ])
+        && isValidId(data.certificateId)
+        && isValidId(data.donationId)
+        && isValidId(data.collectionRequestId)
+        && isValidId(data.donorId)
+        && data.donorName is string && data.donorName.size() >= 1 && data.donorName.size() <= 80
+        && isValidId(data.receiverId)
+        && data.receiverName is string && data.receiverName.size() >= 1 && data.receiverName.size() <= 80
+        && data.foodName is string && data.foodName.size() >= 1 && data.foodName.size() <= 120
+        && isValidFoodCategory(data.foodCategory)
+        && data.quantityDelivered is number && data.quantityDelivered >= 1 && data.quantityDelivered <= 100000
+        && data.quantityUnit is string && data.quantityUnit.size() >= 1 && data.quantityUnit.size() <= 40
+        && data.city is string && data.city.size() >= 1 && data.city.size() <= 80
+        && data.verificationToken is string && data.verificationToken.size() >= 10 && data.verificationToken.size() <= 128
+        && data.status in ['VALID', 'SUSPENDED']
+        && data.completedAt is timestamp
+        && data.generatedAt is timestamp;
+    }
+
+    match /food_donations/{donationId} {
+      allow get, list: if isSignedIn() && !isHospitalUser();
+      allow create: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(donationId)
+        && isValidFoodDonation(incoming())
+        && incoming().donationId == donationId
+        && incoming().donorId == request.auth.uid
+        && incoming().availableQuantity == incoming().totalQuantity
+        && incoming().activeRequestsCount == 0
+        && incoming().status == 'Available'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(donationId)
+        && isValidFoodDonation(incoming())
+        && incoming().donationId == existing().donationId
+        && incoming().donorId == existing().donorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (existing().donorId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'availableQuantity', 'status', 'activeRequestsCount', 'assignedHomeageId', 'assignedHomeageName', 'updatedAt'
+            ]))
+          || (isHomeageUser()
+            && !(existing().status in ['Completed', 'Cancelled', 'Expired'])
+            && incoming().availableQuantity <= existing().availableQuantity
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'availableQuantity', 'status', 'activeRequestsCount', 'assignedHomeageId', 'assignedHomeageName', 'updatedAt'
+            ]))
+          || (existing().donorId != request.auth.uid
+            && !(existing().status in ['Completed', 'Cancelled', 'Expired'])
+            && incoming().availableQuantity == existing().availableQuantity
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'activeRequestsCount', 'status', 'updatedAt'
+            ]))
+        );
+      allow delete: if false;
+
+      match /private/{docId} {
+        allow get: if isValidId(donationId) && isValidId(docId) && isSignedIn() && !isHospitalUser() && (
+          existing().donorId == request.auth.uid ||
+          (existing().authorizedReceiverIds is list && request.auth.uid in existing().authorizedReceiverIds) ||
+          isHomeageUser() ||
+          isAdmin()
+        );
+        allow list: if isSignedIn() && !isHospitalUser() && (
+          resource.data.donorId == request.auth.uid || isHomeageUser() || isAdmin()
+        );
+        allow create: if isValidId(donationId) && docId == 'contact' && isSignedIn() && isEmailVerified() && !isHospitalUser()
+          && isValidFoodDonationPrivateContact(incoming())
+          && incoming().donationId == donationId
+          && incoming().donorId == request.auth.uid
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(donationId) && docId == 'contact' && isSignedIn() && isEmailVerified() && !isHospitalUser()
+          && isValidFoodDonationPrivateContact(incoming())
+          && (existing().donorId == request.auth.uid || isHomeageUser() || isAdmin())
+          && incoming().donationId == existing().donationId
+          && incoming().donorId == existing().donorId
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['authorizedReceiverIds', 'updatedAt']);
+        allow delete: if false;
+      }
+    }
+
+    match /food_collection_requests/{requestId} {
+      allow get: if isValidId(requestId) && isSignedIn() && !isHospitalUser() && (
+        existing().donorId == request.auth.uid ||
+        existing().receiverId == request.auth.uid ||
+        isHomeageUser() ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && !isHospitalUser() && (
+        resource.data.donorId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid ||
+        isHomeageUser() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(requestId)
+        && isValidFoodCollectionRequest(incoming())
+        && incoming().requestId == requestId
+        && incoming().receiverId == request.auth.uid
+        && incoming().donorId != request.auth.uid
+        && (incoming().status == 'Pending' || (isHomeageUser() && incoming().status == 'Accepted'))
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/food_donations/$(incoming().donationId))
+        && get(/databases/$(database)/documents/food_donations/$(incoming().donationId)).data.availableQuantity >= incoming().requestedQuantity;
+      allow update: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(requestId)
+        && isValidFoodCollectionRequest(incoming())
+        && incoming().requestId == existing().requestId
+        && incoming().donationId == existing().donationId
+        && incoming().donorId == existing().donorId
+        && incoming().receiverId == existing().receiverId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (existing().donorId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'rejectionReason', 'certificateId', 'acceptedAt', 'readyAt', 'collectedAt', 'updatedAt'
+            ]))
+          || (isHomeageUser() && existing().receiverId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'certificateId', 'readyAt', 'collectedAt', 'updatedAt'
+            ]))
+          || (existing().receiverId == request.auth.uid
+            && existing().status == 'Pending'
+            && incoming().status == 'Cancelled'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if false;
+    }
+
+    match /food_assistance_requests/{assistanceId} {
+      allow get, list: if isSignedIn() && !isHospitalUser();
+      allow create: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(assistanceId)
+        && isValidFoodAssistanceRequest(incoming())
+        && incoming().assistanceId == assistanceId
+        && incoming().requesterId == request.auth.uid
+        && incoming().fulfilledQuantity == 0
+        && incoming().amountRaised == 0
+        && incoming().contributionsCount == 0
+        && incoming().volunteersCount == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(assistanceId)
+        && isValidFoodAssistanceRequest(incoming())
+        && incoming().assistanceId == existing().assistanceId
+        && incoming().requesterId == existing().requesterId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (isHomeageUser()
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'homeageStatus', 'assignedHomeageId', 'assignedHomeageName',
+              'assignedVolunteerName', 'distributionScheduledAt',
+              'fulfilledQuantity', 'contributionsCount', 'volunteersCount', 'updatedAt'
+            ]))
+          || (existing().requesterId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'homeageStatus', 'updatedAt']))
+          || (incoming().fulfilledQuantity >= existing().fulfilledQuantity
+            && incoming().amountRaised >= existing().amountRaised
+            && incoming().contributionsCount >= existing().contributionsCount
+            && incoming().volunteersCount >= existing().volunteersCount
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'fulfilledQuantity', 'amountRaised', 'status', 'contributionsCount', 'volunteersCount', 'updatedAt'
+            ]))
+        );
+      allow delete: if false;
+
+      match /private/{docId} {
+        allow get: if isValidId(assistanceId) && isValidId(docId) && isSignedIn() && !isHospitalUser() && (
+          existing().requesterId == request.auth.uid ||
+          (existing().authorizedContributorIds is list && request.auth.uid in existing().authorizedContributorIds) ||
+          isHomeageUser() ||
+          isAdmin()
+        );
+        allow list: if isSignedIn() && !isHospitalUser() && (
+          resource.data.requesterId == request.auth.uid || isHomeageUser() || isAdmin()
+        );
+        allow create: if isValidId(assistanceId) && docId == 'contact' && isSignedIn() && isEmailVerified() && !isHospitalUser()
+          && isValidFoodAssistancePrivateContact(incoming())
+          && incoming().assistanceId == assistanceId
+          && incoming().requesterId == request.auth.uid
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(assistanceId) && docId == 'contact' && isSignedIn() && isEmailVerified() && !isHospitalUser()
+          && isValidFoodAssistancePrivateContact(incoming())
+          && (existing().requesterId == request.auth.uid || isHomeageUser() || isAdmin())
+          && incoming().assistanceId == existing().assistanceId
+          && incoming().requesterId == existing().requesterId
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['authorizedContributorIds', 'updatedAt']);
+        allow delete: if false;
+      }
+    }
+
+    match /food_contributions/{contributionId} {
+      allow get, list: if isSignedIn() && !isHospitalUser() && (
+        resource.data.donorId == request.auth.uid ||
+        resource.data.requesterId == request.auth.uid ||
+        isHomeageUser() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(contributionId)
+        && isValidFoodContribution(incoming())
+        && incoming().contributionId == contributionId
+        && incoming().donorId == request.auth.uid
+        && incoming().status == 'Offered'
+        && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(contributionId)
+        && isValidFoodContribution(incoming())
+        && (existing().requesterId == request.auth.uid || isHomeageUser() || isAdmin())
+        && incoming().contributionId == existing().contributionId
+        && incoming().assistanceId == existing().assistanceId
+        && incoming().donorId == existing().donorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if false;
+    }
+
+    match /money_donations/{donationTxId} {
+      allow get: if isValidId(donationTxId) && isSignedIn() && !isHospitalUser() && (
+        existing().donorId == request.auth.uid ||
+        (isHomeageUser() && ('homeageId' in existing()) && existing().homeageId == homeageOrgId()) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && !isHospitalUser() && (
+        resource.data.donorId == request.auth.uid ||
+        (isHomeageUser() && resource.data.homeageId == homeageOrgId()) ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(donationTxId)
+        && isValidMoneyDonation(incoming())
+        && incoming().donationTxId == donationTxId
+        && incoming().donorId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().verifiedAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /volunteer_registrations/{volunteerId} {
+      allow get, list: if isSignedIn() && !isHospitalUser();
+      allow create: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(volunteerId)
+        && isValidVolunteerRegistration(incoming())
+        && incoming().volunteerId == volunteerId
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'ACTIVE'
+        && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(volunteerId)
+        && isValidVolunteerRegistration(incoming())
+        && (existing().userId == request.auth.uid || isHomeageUser() || isAdmin())
+        && incoming().volunteerId == existing().volunteerId
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'availability']);
+      allow delete: if false;
+    }
+
+    match /food_donation_certificates/{certificateId} {
+      allow get: if isValidId(certificateId);
+      allow list: if isSignedIn() && !isHospitalUser() && (
+        resource.data.donorId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid ||
+        isHomeageUser() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && !isHospitalUser() && isValidId(certificateId)
+        && isValidFoodDonationCertificate(incoming())
+        && incoming().certificateId == certificateId
+        && (incoming().donorId == request.auth.uid || (isHomeageUser() && incoming().receiverId == request.auth.uid))
+        && incoming().status == 'VALID'
+        && incoming().completedAt == request.time
+        && incoming().generatedAt == request.time;
+      allow update: if isAdmin() && isValidId(certificateId)
+        && isValidFoodDonationCertificate(incoming())
+        && incoming().certificateId == existing().certificateId
+        && incoming().verificationToken == existing().verificationToken
+        && incoming().generatedAt == existing().generatedAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if false;
+    }
+
+    // ==================================================
+    // 13. MULTI-PORTAL MANAGEMENT COLLECTIONS
+    // (HOSPITALS, HOMEAGES, USERNAMES, DOCTORS, APPOINTMENTS)
+    // ==================================================
+
+    function isValidHospitalOrg(data) {
+      return data.keys().hasAll([
+          'hospitalId', 'name', 'registrationNumber', 'address', 'city', 'state',
+          'contactPerson', 'mobile', 'email', 'username', 'authUid', 'status',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'hospitalId', 'name', 'hospitalType', 'registrationNumber', 'bloodBankLicense',
+          'address', 'city', 'state', 'postalCode',
+          'contactPerson', 'mobile', 'email', 'username', 'authUid', 'status',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.hospitalId)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 140
+        && (!('hospitalType' in data) || data.hospitalType == null || (data.hospitalType is string && data.hospitalType.size() <= 80))
+        && data.registrationNumber is string && data.registrationNumber.size() >= 2 && data.registrationNumber.size() <= 80
+        && (!('bloodBankLicense' in data) || data.bloodBankLicense == null || (data.bloodBankLicense is string && data.bloodBankLicense.size() <= 80))
+        && data.address is string && data.address.size() >= 3 && data.address.size() <= 240
+        && data.city is string && data.city.size() >= 2 && data.city.size() <= 80
+        && data.state is string && data.state.size() >= 2 && data.state.size() <= 80
+        && (!('postalCode' in data) || data.postalCode == null || (data.postalCode is string && data.postalCode.size() <= 20))
+        && data.contactPerson is string && data.contactPerson.size() >= 2 && data.contactPerson.size() <= 100
+        && data.mobile is string && data.mobile.size() >= 6 && data.mobile.size() <= 30
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 160
+        && data.username is string && data.username.size() >= 3 && data.username.size() <= 60
+        && isValidId(data.authUid)
+        && data.status in ['ACTIVE', 'INACTIVE']
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidHospitalUser(data) {
+      return data.keys().hasAll([
+          'uid', 'hospitalId', 'hospitalName', 'email', 'username', 'role', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'hospitalId', 'hospitalName', 'email', 'username', 'role', 'status', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && isValidId(data.hospitalId)
+        && data.hospitalName is string && data.hospitalName.size() >= 2 && data.hospitalName.size() <= 140
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 160
+        && data.username is string && data.username.size() >= 3 && data.username.size() <= 60
+        && data.role == 'HOSPITAL'
+        && data.status in ['ACTIVE', 'INACTIVE']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidHomeageOrg(data) {
+      return data.keys().hasAll([
+          'homeageId', 'name', 'contactPerson', 'mobile', 'email', 'address', 'city', 'state',
+          'username', 'authUid', 'status', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'homeageId', 'name', 'organizationType', 'registrationNumber', 'dailyCapacity',
+          'contactPerson', 'mobile', 'email',
+          'address', 'city', 'state', 'postalCode', 'username', 'authUid', 'status',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.homeageId)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 140
+        && (!('organizationType' in data) || data.organizationType == null || (data.organizationType is string && data.organizationType.size() <= 80))
+        && (!('registrationNumber' in data) || data.registrationNumber == null || (data.registrationNumber is string && data.registrationNumber.size() <= 80))
+        && (!('dailyCapacity' in data) || data.dailyCapacity == null || (data.dailyCapacity is number && data.dailyCapacity >= 1 && data.dailyCapacity <= 50000))
+        && data.contactPerson is string && data.contactPerson.size() >= 2 && data.contactPerson.size() <= 100
+        && data.mobile is string && data.mobile.size() >= 6 && data.mobile.size() <= 30
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 160
+        && data.address is string && data.address.size() >= 3 && data.address.size() <= 240
+        && data.city is string && data.city.size() >= 2 && data.city.size() <= 80
+        && data.state is string && data.state.size() >= 2 && data.state.size() <= 80
+        && (!('postalCode' in data) || data.postalCode == null || (data.postalCode is string && data.postalCode.size() <= 20))
+        && data.username is string && data.username.size() >= 3 && data.username.size() <= 60
+        && isValidId(data.authUid)
+        && data.status in ['ACTIVE', 'INACTIVE']
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidHomeageUser(data) {
+      return data.keys().hasAll([
+          'uid', 'homeageId', 'homeageName', 'email', 'username', 'role', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'homeageId', 'homeageName', 'email', 'username', 'role', 'status', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && isValidId(data.homeageId)
+        && data.homeageName is string && data.homeageName.size() >= 2 && data.homeageName.size() <= 140
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 160
+        && data.username is string && data.username.size() >= 3 && data.username.size() <= 60
+        && data.role == 'HOMEAGE'
+        && data.status in ['ACTIVE', 'INACTIVE']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOrgUsername(data) {
+      return data.keys().hasAll(['username', 'email', 'role', 'orgId', 'createdAt'])
+        && data.keys().hasOnly(['username', 'email', 'role', 'orgId', 'createdAt'])
+        && data.username is string && data.username.size() >= 3 && data.username.size() <= 60
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 160
+        && data.role in ['HOSPITAL', 'HOMEAGE']
+        && isValidId(data.orgId)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidDoctorProfile(data) {
+      return data.keys().hasAll([
+          'doctorId', 'hospitalId', 'hospitalName', 'city', 'name', 'specialty',
+          'qualification', 'experienceYears', 'consultationFee', 'availabilityDays',
+          'availabilitySlots', 'isAvailable', 'isPublished', 'verified', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'doctorId', 'hospitalId', 'hospitalName', 'city', 'name', 'specialty',
+          'qualification', 'experienceYears', 'consultationFee', 'bio', 'availabilityDays',
+          'availabilitySlots', 'isAvailable', 'isPublished', 'verified', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.doctorId)
+        && isValidId(data.hospitalId)
+        && data.hospitalName is string && data.hospitalName.size() >= 2 && data.hospitalName.size() <= 140
+        && data.city is string && data.city.size() >= 2 && data.city.size() <= 80
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.specialty is string && data.specialty.size() >= 2 && data.specialty.size() <= 100
+        && data.qualification is string && data.qualification.size() >= 2 && data.qualification.size() <= 120
+        && data.experienceYears is number && data.experienceYears >= 0 && data.experienceYears <= 80
+        && data.consultationFee is number && data.consultationFee >= 0 && data.consultationFee <= 100000
+        && (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 600))
+        && data.availabilityDays is list && data.availabilityDays.size() <= 7 && (data.availabilityDays.size() == 0 || data.availabilityDays[0] is string)
+        && data.availabilitySlots is list && data.availabilitySlots.size() <= 20 && (data.availabilitySlots.size() == 0 || data.availabilitySlots[0] is string)
+        && data.isAvailable is bool
+        && data.isPublished is bool
+        && data.verified is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDoctorAppointment(data) {
+      return data.keys().hasAll([
+          'appointmentId', 'doctorId', 'doctorName', 'specialty', 'hospitalId', 'hospitalName',
+          'patientId', 'patientName', 'patientMobile', 'appointmentDate', 'timeSlot',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'appointmentId', 'doctorId', 'doctorName', 'specialty', 'hospitalId', 'hospitalName',
+          'patientId', 'patientName', 'patientMobile', 'appointmentDate', 'timeSlot',
+          'reason', 'status', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.appointmentId)
+        && isValidId(data.doctorId)
+        && data.doctorName is string && data.doctorName.size() >= 2 && data.doctorName.size() <= 100
+        && data.specialty is string && data.specialty.size() >= 2 && data.specialty.size() <= 100
+        && isValidId(data.hospitalId)
+        && data.hospitalName is string && data.hospitalName.size() >= 2 && data.hospitalName.size() <= 140
+        && isValidId(data.patientId)
+        && data.patientName is string && data.patientName.size() >= 2 && data.patientName.size() <= 100
+        && data.patientMobile is string && data.patientMobile.size() >= 6 && data.patientMobile.size() <= 30
+        && data.appointmentDate is string && data.appointmentDate.size() >= 4 && data.appointmentDate.size() <= 40
+        && data.timeSlot is string && data.timeSlot.size() >= 2 && data.timeSlot.size() <= 40
+        && (!('reason' in data) || data.reason == null || (data.reason is string && data.reason.size() <= 500))
+        && data.status in ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /hospitals/{hospitalId} {
+      allow get: if isValidId(hospitalId) && isSignedIn() && !isHomeageUser() && (
+        existing().status == 'ACTIVE' ||
+        (isHospitalUser() && hospitalOrgId() == hospitalId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && !isHomeageUser() && (
+        resource.data.status == 'ACTIVE' || isAdmin()
+      );
+      allow create: if isValidId(hospitalId)
+        && isValidHospitalOrg(incoming())
+        && incoming().hospitalId == hospitalId
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (isSignedIn()
+            && !exists(/databases/$(database)/documents/homeage_users/$(request.auth.uid))
+            && !exists(/databases/$(database)/documents/hospital_users/$(request.auth.uid))
+            && incoming().authUid == request.auth.uid
+            && incoming().status == 'ACTIVE'
+            && existsAfter(/databases/$(database)/documents/hospital_users/$(request.auth.uid)))
+        );
+      allow update: if isAdmin() && isValidId(hospitalId)
+        && isValidHospitalOrg(incoming())
+        && incoming().hospitalId == existing().hospitalId
+        && incoming().authUid == existing().authUid
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /hospital_users/{uid} {
+      allow get: if isValidId(uid) && isSignedIn() && (uid == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(uid)
+        && isValidHospitalUser(incoming())
+        && incoming().uid == uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (isSignedIn()
+            && uid == request.auth.uid
+            && !exists(/databases/$(database)/documents/homeage_users/$(request.auth.uid))
+            && incoming().status == 'ACTIVE'
+            && existsAfter(/databases/$(database)/documents/hospitals/$(incoming().hospitalId)))
+        );
+      allow update: if isAdmin() && isValidId(uid)
+        && isValidHospitalUser(incoming())
+        && incoming().uid == existing().uid
+        && incoming().hospitalId == existing().hospitalId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /homeage_organizations/{homeageId} {
+      allow get: if isValidId(homeageId) && isSignedIn() && !isHospitalUser() && (
+        existing().status == 'ACTIVE' ||
+        (isHomeageUser() && homeageOrgId() == homeageId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && !isHospitalUser() && (
+        resource.data.status == 'ACTIVE' || isAdmin()
+      );
+      allow create: if isValidId(homeageId)
+        && isValidHomeageOrg(incoming())
+        && incoming().homeageId == homeageId
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (isSignedIn()
+            && !exists(/databases/$(database)/documents/hospital_users/$(request.auth.uid))
+            && !exists(/databases/$(database)/documents/homeage_users/$(request.auth.uid))
+            && incoming().authUid == request.auth.uid
+            && incoming().status == 'ACTIVE'
+            && existsAfter(/databases/$(database)/documents/homeage_users/$(request.auth.uid)))
+        );
+      allow update: if isAdmin() && isValidId(homeageId)
+        && isValidHomeageOrg(incoming())
+        && incoming().homeageId == existing().homeageId
+        && incoming().authUid == existing().authUid
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /homeage_users/{uid} {
+      allow get: if isValidId(uid) && isSignedIn() && (uid == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(uid)
+        && isValidHomeageUser(incoming())
+        && incoming().uid == uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (isSignedIn()
+            && uid == request.auth.uid
+            && !exists(/databases/$(database)/documents/hospital_users/$(request.auth.uid))
+            && incoming().status == 'ACTIVE'
+            && existsAfter(/databases/$(database)/documents/homeage_organizations/$(incoming().homeageId)))
+        );
+      allow update: if isAdmin() && isValidId(uid)
+        && isValidHomeageUser(incoming())
+        && incoming().uid == existing().uid
+        && incoming().homeageId == existing().homeageId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /org_usernames/{usernameLower} {
+      allow get: if isValidId(usernameLower);
+      allow list: if false;
+      allow create: if isValidId(usernameLower)
+        && isValidOrgUsername(incoming())
+        && incoming().username == usernameLower
+        && incoming().createdAt == request.time
+        && (
+          isAdmin()
+          || (isSignedIn() && (
+            (incoming().role == 'HOSPITAL'
+              && existsAfter(/databases/$(database)/documents/hospital_users/$(request.auth.uid))
+              && getAfter(/databases/$(database)/documents/hospital_users/$(request.auth.uid)).data.hospitalId == incoming().orgId)
+            || (incoming().role == 'HOMEAGE'
+              && existsAfter(/databases/$(database)/documents/homeage_users/$(request.auth.uid))
+              && getAfter(/databases/$(database)/documents/homeage_users/$(request.auth.uid)).data.homeageId == incoming().orgId)
+          ))
+        );
+      allow update, delete: if false;
+    }
+
+    match /doctors/{doctorId} {
+      allow get: if isValidId(doctorId) && (
+        existing().isPublished == true ||
+        (isHospitalUser() && existing().hospitalId == hospitalOrgId()) ||
+        isAdmin()
+      );
+      allow list: if (
+        resource.data.isPublished == true ||
+        (isHospitalUser() && resource.data.hospitalId == hospitalOrgId()) ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isValidId(doctorId)
+        && isValidDoctorProfile(incoming())
+        && incoming().doctorId == doctorId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (isAdmin() || (isHospitalUser() && incoming().hospitalId == hospitalOrgId()));
+      allow update: if isSignedIn() && isValidId(doctorId)
+        && isValidDoctorProfile(incoming())
+        && incoming().doctorId == existing().doctorId
+        && incoming().hospitalId == existing().hospitalId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (isAdmin() || (isHospitalUser() && existing().hospitalId == hospitalOrgId()));
+      allow delete: if false;
+    }
+
+    match /doctor_appointments/{appointmentId} {
+      allow get: if isValidId(appointmentId) && isSignedIn() && !isHomeageUser() && (
+        existing().patientId == request.auth.uid ||
+        (isHospitalUser() && existing().hospitalId == hospitalOrgId()) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && !isHomeageUser() && (
+        resource.data.patientId == request.auth.uid ||
+        (isHospitalUser() && resource.data.hospitalId == hospitalOrgId()) ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isEmailVerified() && !isHomeageUser() && isValidId(appointmentId)
+        && isValidDoctorAppointment(incoming())
+        && incoming().appointmentId == appointmentId
+        && incoming().patientId == request.auth.uid
+        && incoming().status == 'PENDING'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isEmailVerified() && !isHomeageUser() && isValidId(appointmentId)
+        && isValidDoctorAppointment(incoming())
+        && incoming().appointmentId == existing().appointmentId
+        && incoming().doctorId == existing().doctorId
+        && incoming().hospitalId == existing().hospitalId
+        && incoming().patientId == existing().patientId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (isHospitalUser() && existing().hospitalId == hospitalOrgId()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+          || (existing().patientId == request.auth.uid
+            && existing().status == 'PENDING'
+            && incoming().status == 'CANCELLED'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if false;
+    }
+  }
+}

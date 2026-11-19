@@ -1,0 +1,46 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-brand-blue: #0A58CA;
+  --color-brand-red: #DC3545;
+  --color-brand-green: #198754;
+  --color-brand-orange: #FD7E14;
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/75 dark:bg-slate-900/75 backdrop-blur-xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_8px_32px_0_rgba(15,23,42,0.06)];
+  }
+
+  .glass-dark {
+    @apply bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.2)];
+  }
+
+  .glass-card {
+    @apply bg-white/85 dark:bg-slate-900/85 backdrop-blur-lg border border-slate-200/80 dark:border-slate-800 shadow-sm rounded-2xl;
+  }
+
+  .card-3d {
+    @apply transition-transform duration-200 ease-out;
+  }
+
+  .card-3d:hover {
+    @apply -translate-y-0.5 shadow-md;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  @apply bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased transition-colors duration-200;
+}
